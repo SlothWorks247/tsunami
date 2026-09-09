@@ -115,6 +115,7 @@
           <div class="analysis-buttons">
             <button id="sizing-btn" class="btn-primary" type="button">Get Sizing Recommendation</button>
             <button id="schema-btn" class="btn-primary" type="button">Analyze Schema</button>
+            <button id="embeddings-btn" class="btn-primary" type="button" disabled title="Coming soon — will generate vector embeddings from stored notes/documents in Atlas">Generate Embeddings</button>
           </div>
           <div id="analysis-output-wrap" class="hidden">
             <div class="output-header">
@@ -169,6 +170,10 @@
       </div>
     </section>
   </main>
+
+  <div id="image-modal" class="image-modal-overlay hidden">
+    <img id="image-modal-img" src="" alt="Full size image" />
+  </div>
 
   <script src="script.js"></script>
 </body>

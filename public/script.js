@@ -307,6 +307,23 @@
 
   // ---------- Notes list ----------
   const notesList = document.getElementById("notes-list");
+  const imageModal = document.getElementById("image-modal");
+  const imageModalImg = document.getElementById("image-modal-img");
+
+  imageModal.addEventListener("click", () => closeImageModal());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeImageModal();
+  });
+
+  function openImageModal(url) {
+    imageModalImg.src = url;
+    imageModal.classList.remove("hidden");
+  }
+
+  function closeImageModal() {
+    imageModal.classList.add("hidden");
+    imageModalImg.src = "";
+  }
 
   async function loadNotes() {
     if (!state.currentCustomerSlug || !state.currentAppSlug) return;
@@ -321,25 +338,205 @@
       return;
     }
     for (const note of notes) {
-      const li = document.createElement("li");
-      const date = new Date(note.createdAt).toLocaleString();
-      if (note.type === "file") {
-        const fileUrl = `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/files/${note.fileId}`;
-        li.innerHTML = `
-          <div class="note-title">${escapeHtml(note.title)}</div>
-          <div class="note-meta">${date} - file - ${escapeHtml(note.filename)} (${formatBytes(note.size)})</div>
-          <div class="note-body-preview"><a href="${fileUrl}" target="_blank">Download / View</a></div>
-        `;
+      notesList.appendChild(renderNoteViewMode(note));
+    }
+  }
+
+  function noteMetaLine(note) {
+    const date = new Date(note.createdAt).toLocaleString();
+    const edited =
+      note.updatedAt && note.updatedAt !== note.createdAt ? " (edited)" : "";
+    if (note.type === "file") {
+      return `${date} - file - ${escapeHtml(note.filename)} (${formatBytes(
+        note.size
+      )})${edited}`;
+    }
+    return `${date} - text${edited}`;
+  }
+
+  function renderNoteViewMode(note) {
+    const li = document.createElement("li");
+    li.dataset.noteId = note._id;
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "note-title";
+    titleDiv.textContent = note.title;
+    li.appendChild(titleDiv);
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "note-meta";
+    metaDiv.innerHTML = noteMetaLine(note);
+    li.appendChild(metaDiv);
+
+    if (note.type === "file") {
+      const fileUrl = `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/files/${note.fileId}`;
+      if (note.contentType && note.contentType.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.className = "note-thumbnail";
+        img.src = fileUrl;
+        img.alt = note.filename;
+        img.addEventListener("click", () => openImageModal(fileUrl));
+        li.appendChild(img);
       } else {
-        const preview =
-          note.body.length > 300 ? note.body.slice(0, 300) + "..." : note.body;
-        li.innerHTML = `
-          <div class="note-title">${escapeHtml(note.title)}</div>
-          <div class="note-meta">${date} - text</div>
-          <div class="note-body-preview">${escapeHtml(preview)}</div>
-        `;
+        const bodyDiv = document.createElement("div");
+        bodyDiv.className = "note-body-preview";
+        bodyDiv.innerHTML = `<a href="${fileUrl}" target="_blank">Download / View</a>`;
+        li.appendChild(bodyDiv);
       }
-      notesList.appendChild(li);
+    } else {
+      const bodyDiv = document.createElement("div");
+      const lineCount = (note.body.match(/\n/g) || []).length + 1;
+      const needsClamp = lineCount > 10 || note.body.length > 700;
+      bodyDiv.className = needsClamp
+        ? "note-body-preview clamped"
+        : "note-body-preview";
+      bodyDiv.textContent = note.body;
+      li.appendChild(bodyDiv);
+
+      if (needsClamp) {
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "show-more-link";
+        toggle.textContent = "Show more";
+        toggle.addEventListener("click", () => {
+          const isClamped = bodyDiv.classList.toggle("clamped");
+          toggle.textContent = isClamped ? "Show more" : "Show less";
+        });
+        li.appendChild(toggle);
+      }
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "note-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "note-action-btn";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => {
+      li.replaceWith(renderNoteEditMode(note));
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "note-action-btn delete";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", () => deleteNote(note._id));
+
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+    li.appendChild(actions);
+
+    return li;
+  }
+
+  function renderNoteEditMode(note) {
+    const li = document.createElement("li");
+    li.dataset.noteId = note._id;
+
+    const form = document.createElement("div");
+    form.className = "note-edit-form";
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.value = note.title;
+    titleInput.placeholder = "Title";
+    form.appendChild(titleInput);
+
+    let bodyTextarea = null;
+    let fileInput = null;
+
+    if (note.type === "text") {
+      bodyTextarea = document.createElement("textarea");
+      bodyTextarea.rows = 6;
+      bodyTextarea.value = note.body;
+      form.appendChild(bodyTextarea);
+    } else {
+      const fileLabel = document.createElement("label");
+      fileLabel.textContent = "Replace file (optional)";
+      form.appendChild(fileLabel);
+      fileInput = document.createElement("input");
+      fileInput.type = "file";
+      form.appendChild(fileInput);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "note-edit-actions";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "btn-primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", async () => {
+      const title = titleInput.value.trim();
+      if (!title) {
+        alert("Title is required");
+        return;
+      }
+      saveBtn.disabled = true;
+      try {
+        if (note.type === "text") {
+          const body = bodyTextarea.value.trim();
+          if (!body) throw new Error("Note body is required");
+          await api(
+            `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/notes/${note._id}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title, body }),
+            }
+          );
+        } else if (fileInput.files[0]) {
+          const formData = new FormData();
+          formData.append("file", fileInput.files[0]);
+          formData.append("title", title);
+          await api(
+            `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/notes/${note._id}/upload`,
+            { method: "PUT", body: formData }
+          );
+        } else {
+          await api(
+            `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/notes/${note._id}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title }),
+            }
+          );
+        }
+        await loadNotes();
+      } catch (err) {
+        alert(err.message);
+        saveBtn.disabled = false;
+      }
+    });
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn-secondary";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => {
+      li.replaceWith(renderNoteViewMode(note));
+    });
+
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+    form.appendChild(actions);
+    li.appendChild(form);
+
+    return li;
+  }
+
+  async function deleteNote(noteId) {
+    if (!confirm("Are you sure you want to delete this note?")) return;
+    try {
+      await api(
+        `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/notes/${noteId}`,
+        { method: "DELETE" }
+      );
+      await loadNotes();
+    } catch (err) {
+      alert(err.message);
     }
   }
 

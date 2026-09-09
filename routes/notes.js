@@ -147,6 +147,184 @@ router.post("/notes/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+// PUT /api/customers/:customerSlug/apps/:appSlug/notes/:noteId - edit a text
+// note's title/body, or rename a file note's title (JSON only - use the
+// /upload variant below to replace a file note's underlying file).
+router.put("/notes/:noteId", async (req, res) => {
+  try {
+    const { customerSlug, appSlug, noteId } = req.params;
+    const { title, body } = req.body;
+
+    const app = await findApp(customerSlug, appSlug);
+    if (!app) {
+      return res.status(404).json({ error: "Customer or app not found" });
+    }
+
+    let objectId;
+    try {
+      objectId = new ObjectId(noteId);
+    } catch {
+      return res.status(400).json({ error: "Invalid note id" });
+    }
+
+    const notes = getAppNotesCollection(customerSlug, appSlug);
+    const existing = await notes.findOne({ _id: objectId });
+    if (!existing) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: "Title is required" });
+    }
+
+    const update = { title: title.trim(), updatedAt: new Date() };
+
+    if (existing.type === "text") {
+      if (!body || !body.trim()) {
+        return res.status(400).json({ error: "Note body is required" });
+      }
+      update.body = body;
+    }
+    // File notes: only title is updated via this route. Body is ignored
+    // even if sent, since file notes don't have a body field.
+
+    await notes.updateOne({ _id: objectId }, { $set: update });
+    const updated = await notes.findOne({ _id: objectId });
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update note" });
+  }
+});
+
+// PUT /api/customers/:customerSlug/apps/:appSlug/notes/:noteId/upload -
+// replace a file note's underlying file (multipart, field `file`, optional
+// `title`). Old GridFS file is deleted after the new one is stored.
+router.put(
+  "/notes/:noteId/upload",
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const { customerSlug, appSlug, noteId } = req.params;
+      const { title } = req.body;
+
+      const app = await findApp(customerSlug, appSlug);
+      if (!app) {
+        return res.status(404).json({ error: "Customer or app not found" });
+      }
+
+      let objectId;
+      try {
+        objectId = new ObjectId(noteId);
+      } catch {
+        return res.status(400).json({ error: "Invalid note id" });
+      }
+
+      const notes = getAppNotesCollection(customerSlug, appSlug);
+      const existing = await notes.findOne({ _id: objectId });
+      if (!existing) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      if (existing.type !== "file") {
+        return res
+          .status(400)
+          .json({ error: "Only file notes can have their file replaced" });
+      }
+      if (!req.file) {
+        return res
+          .status(400)
+          .json({ error: "No file uploaded (field name must be 'file')" });
+      }
+
+      const bucket = getAppBucket(customerSlug, appSlug);
+      const uploadStream = bucket.openUploadStream(req.file.originalname, {
+        contentType: req.file.mimetype,
+      });
+
+      uploadStream.end(req.file.buffer);
+
+      uploadStream.on("error", (err) => {
+        console.error(err);
+        res.status(500).json({ error: "Failed to store replacement file" });
+      });
+
+      uploadStream.on("finish", async () => {
+        const oldFileId = existing.fileId;
+
+        const update = {
+          title: (title && title.trim()) || req.file.originalname,
+          fileId: uploadStream.id,
+          filename: req.file.originalname,
+          contentType: req.file.mimetype,
+          size: req.file.size,
+          updatedAt: new Date(),
+        };
+
+        await notes.updateOne({ _id: objectId }, { $set: update });
+
+        // Clean up the old file now that the note points at the new one.
+        try {
+          await bucket.delete(new ObjectId(oldFileId));
+        } catch (err) {
+          console.warn(
+            `Could not delete old GridFS file ${oldFileId}:`,
+            err.message
+          );
+        }
+
+        const updated = await notes.findOne({ _id: objectId });
+        res.json(updated);
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to replace file" });
+    }
+  }
+);
+
+// DELETE /api/customers/:customerSlug/apps/:appSlug/notes/:noteId
+router.delete("/notes/:noteId", async (req, res) => {
+  try {
+    const { customerSlug, appSlug, noteId } = req.params;
+
+    const app = await findApp(customerSlug, appSlug);
+    if (!app) {
+      return res.status(404).json({ error: "Customer or app not found" });
+    }
+
+    let objectId;
+    try {
+      objectId = new ObjectId(noteId);
+    } catch {
+      return res.status(400).json({ error: "Invalid note id" });
+    }
+
+    const notes = getAppNotesCollection(customerSlug, appSlug);
+    const existing = await notes.findOne({ _id: objectId });
+    if (!existing) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    if (existing.type === "file" && existing.fileId) {
+      const bucket = getAppBucket(customerSlug, appSlug);
+      try {
+        await bucket.delete(new ObjectId(existing.fileId));
+      } catch (err) {
+        console.warn(
+          `Could not delete GridFS file ${existing.fileId} for note ${noteId}:`,
+          err.message
+        );
+      }
+    }
+
+    await notes.deleteOne({ _id: objectId });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete note" });
+  }
+});
+
 // GET /api/customers/:customerSlug/apps/:appSlug/files/:fileId - stream file back
 router.get("/files/:fileId", async (req, res) => {
   try {
