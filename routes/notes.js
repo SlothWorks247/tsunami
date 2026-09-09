@@ -365,11 +365,17 @@ router.get("/files/:fileId", async (req, res) => {
   }
 });
 
-// GET /api/customers/:customerSlug/apps/:appSlug/analysis/sizing
-router.get("/analysis/sizing", async (req, res) => {
+// POST /api/customers/:customerSlug/apps/:appSlug/analysis/sizing
+// body: { dataSizeGB, growthMultiplier, indexOverheadPercent }
+router.post("/analysis/sizing", async (req, res) => {
   try {
     const { customerSlug, appSlug } = req.params;
-    const report = await generateSizingReport(customerSlug, appSlug);
+    const { dataSizeGB, growthMultiplier, indexOverheadPercent } = req.body;
+    const report = await generateSizingReport(customerSlug, appSlug, {
+      dataSizeGB,
+      growthMultiplier,
+      indexOverheadPercent,
+    });
     res.json(report);
   } catch (err) {
     console.error(err);

@@ -204,6 +204,32 @@ form input, form textarea {
   margin-top: 0;
 }
 
+.sizing-form {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  background: var(--mdb-bg);
+  border: 1px solid var(--mdb-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.sizing-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sizing-form-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mdb-forest);
+}
+
+.sizing-form-field input {
+  width: 140px;
+}
+
 .hidden {
   display: none !important;
 }

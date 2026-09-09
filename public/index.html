@@ -115,13 +115,29 @@
           </div>
 
           <div class="analysis-buttons">
-            <button id="tab-notes" class="tab-btn active" type="button">Notes</button>
             <button id="tab-settings" class="tab-btn" type="button">Settings</button>
             <button id="embeddings-btn" class="btn-primary" type="button" disabled title="Coming soon: Create the vector embeddings in Atlas">Generate Embeddings</button>
             <button id="update-summary-btn" class="btn-primary" type="button" disabled title="Coming soon: Update the Executive Summary with an AI-generated summary of your notes">Update Summary</button>
             <button id="sizing-btn" class="btn-primary" type="button" title="Run the sizing calculator based on settings.">Sizing Recommendation</button>
             <button id="schema-btn" class="btn-primary" type="button" title="Create a suggested data model to store the customer's data">Suggest Data Model</button>
           </div>
+
+          <div id="sizing-form" class="inline-form sizing-form hidden">
+            <div class="sizing-form-field">
+              <label for="sizing-data-size">Estimated Data Size (GB)</label>
+              <input id="sizing-data-size" type="number" min="0" step="0.1" placeholder="e.g. 50" required />
+            </div>
+            <div class="sizing-form-field">
+              <label for="sizing-growth-multiplier">Growth Multiplier</label>
+              <input id="sizing-growth-multiplier" type="number" min="1" step="0.1" placeholder="3" />
+            </div>
+            <div class="sizing-form-field">
+              <label for="sizing-index-overhead">Index Overhead (%)</label>
+              <input id="sizing-index-overhead" type="number" min="0" step="1" placeholder="15" />
+            </div>
+            <button id="sizing-calculate-btn" class="btn-primary" type="button">Calculate</button>
+          </div>
+
           <div id="analysis-output-wrap" class="hidden">
             <div class="output-header">
               <span id="analysis-output-title"></span>

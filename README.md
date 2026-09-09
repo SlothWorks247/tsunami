@@ -11,8 +11,8 @@ A single-user (per team), multi-customer web app for capturing engagement notes 
 - **Customer → App → Notes hierarchy** — select or create a customer, then select or create an app for that customer, then capture notes scoped to that pair.
 - **Text notes** — paste/type notes directly into the app, with editing, deleting, and a 10-line preview (expandable) for long notes.
 - **File & image notes** — upload documents/images, stored in MongoDB Atlas via GridFS; images show as clickable thumbnails that expand to full size, and both the file and title can be edited (including replacing the underlying file) or deleted.
-- **Sizing recommendation** — heuristic Atlas cluster tier estimate based on actual stored data size (per app), using configurable tier pricing.
-- **Schema design linting** — flags schema drift, oversized documents, missing indexes, and other design concerns found in a given app's notes.
+- **Sizing recommendation** — manual-input calculator (estimated data size, growth multiplier, index overhead) that recommends an Atlas cluster tier using configurable tier pricing; if no data size is provided, returns a list of discovery questions to ask the customer instead (full AI-based sizing from note content is planned but not yet implemented).
+- **Schema design linting** — flags schema drift, oversized documents, missing indexes, and other design concerns found in a given app's notes; if fewer than 3 notes exist, returns data-modeling discovery questions to ask the customer instead.
 - **Settings page** — edit Atlas tier pricing and global/per-customer discount percentages used in sizing calculations.
 
 ## Tech Stack
@@ -156,8 +156,8 @@ This app is designed to be **extracted into a folder and run with zero config fi
 | PUT | `/api/customers/:customerSlug/apps/:appSlug/notes/:noteId/upload` | Replace a file note's underlying file (multipart form, field `file`, optional `title`) |
 | DELETE | `/api/customers/:customerSlug/apps/:appSlug/notes/:noteId` | Delete a note (also deletes its GridFS file, if any) |
 | GET | `/api/customers/:customerSlug/apps/:appSlug/files/:fileId` | Stream/download a file note's content |
-| GET | `/api/customers/:customerSlug/apps/:appSlug/analysis/sizing` | Get heuristic sizing recommendation (text) |
-| GET | `/api/customers/:customerSlug/apps/:appSlug/analysis/schema` | Get schema design lint findings (text) |
+| POST | `/api/customers/:customerSlug/apps/:appSlug/analysis/sizing` | Get a sizing recommendation from manual inputs `{ dataSizeGB, growthMultiplier, indexOverheadPercent }`, or a list of discovery questions if `dataSizeGB` is missing |
+| GET | `/api/customers/:customerSlug/apps/:appSlug/analysis/schema` | Get schema design lint findings, or a list of discovery questions if fewer than 3 notes exist |
 
 ## Known Limitations / Explicitly Deferred (future work)
 

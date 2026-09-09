@@ -7,6 +7,15 @@ const {
 const SAMPLE_SIZE = 100;
 const LARGE_BODY_WARN_BYTES = 1 * 1024 * 1024; // 1 MB
 const LARGE_BODY_URGENT_BYTES = 8 * 1024 * 1024; // 8 MB
+const MIN_NOTES_FOR_ANALYSIS = 3;
+
+const DATA_MODEL_DISCOVERY_QUESTIONS = [
+  "What are the main entities/objects in their application (e.g. users, orders, products)?",
+  "What are the relationships between these entities (one-to-many, many-to-many, etc.)?",
+  "What are their typical read/write query patterns - which queries need to be fast?",
+  "Are there large embedded content types (images, arrays, attachments) to plan for?",
+  "What are their data retention/archival requirements?",
+];
 
 function typeOf(value) {
   if (value === null || value === undefined) return "null";
@@ -14,6 +23,31 @@ function typeOf(value) {
   if (value instanceof Date) return "date";
   if (value && value._bsontype === "ObjectId") return "objectId";
   return typeof value;
+}
+
+function buildInsufficientInfoReport(customer, app, noteCount) {
+  const lines = [];
+  lines.push(`MORE INFORMATION NEEDED`);
+  lines.push(`Customer: ${customer.name}`);
+  lines.push(`App: ${app.name}`);
+  lines.push("");
+  lines.push(
+    `Not enough notes exist yet to suggest a data model (found ${noteCount}, need at least ${MIN_NOTES_FOR_ANALYSIS}). Ask the customer:`
+  );
+  for (const q of DATA_MODEL_DISCOVERY_QUESTIONS) {
+    lines.push(`- ${q}`);
+  }
+
+  return {
+    text: lines.join("\n"),
+    data: {
+      customer: customer.name,
+      app: app.name,
+      needsMoreInfo: true,
+      noteCount,
+      questions: DATA_MODEL_DISCOVERY_QUESTIONS,
+    },
+  };
 }
 
 /**
@@ -34,6 +68,11 @@ async function generateSchemaReport(customerSlug, appSlug) {
   }
 
   const notesCollection = getAppNotesCollection(customerSlug, appSlug);
+
+  const totalNoteCount = await notesCollection.countDocuments({});
+  if (totalNoteCount < MIN_NOTES_FOR_ANALYSIS) {
+    return buildInsufficientInfoReport(customer, app, totalNoteCount);
+  }
 
   const sample = await notesCollection
     .aggregate([{ $sample: { size: SAMPLE_SIZE } }])

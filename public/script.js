@@ -73,12 +73,10 @@
   });
 
   // ---------- Tab navigation ----------
-  const tabNotes = document.getElementById("tab-notes");
   const tabSettings = document.getElementById("tab-settings");
   const viewNotes = document.getElementById("view-notes");
   const viewSettings = document.getElementById("view-settings");
 
-  tabNotes.addEventListener("click", () => switchTab("notes"));
   tabSettings.addEventListener("click", () => {
     switchTab("settings");
     loadPricingConfig();
@@ -87,7 +85,6 @@
 
   function switchTab(tab) {
     const isNotes = tab === "notes";
-    tabNotes.classList.toggle("active", isNotes);
     tabSettings.classList.toggle("active", !isNotes);
     viewNotes.classList.toggle("active", isNotes);
     viewSettings.classList.toggle("active", !isNotes);
@@ -562,26 +559,47 @@
   const analysisOutputTitle = document.getElementById("analysis-output-title");
   const analysisOutput = document.getElementById("analysis-output");
   const copyOutputBtn = document.getElementById("copy-output-btn");
+  const sizingForm = document.getElementById("sizing-form");
+  const sizingDataSizeInput = document.getElementById("sizing-data-size");
+  const sizingGrowthInput = document.getElementById("sizing-growth-multiplier");
+  const sizingIndexOverheadInput = document.getElementById("sizing-index-overhead");
+  const sizingCalculateBtn = document.getElementById("sizing-calculate-btn");
 
   function hideAnalysisOutput() {
     analysisOutputWrap.classList.add("hidden");
     analysisOutput.textContent = "";
+    sizingForm.classList.add("hidden");
   }
 
-  sizingBtn.addEventListener("click", async () => {
+  sizingBtn.addEventListener("click", () => {
+    sizingForm.classList.toggle("hidden");
+  });
+
+  sizingCalculateBtn.addEventListener("click", async () => {
     if (!state.currentCustomerSlug || !state.currentAppSlug) return;
-    sizingBtn.disabled = true;
+    sizingCalculateBtn.disabled = true;
     try {
       const result = await api(
-        `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/analysis/sizing`
+        `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/analysis/sizing`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dataSizeGB: sizingDataSizeInput.value,
+            growthMultiplier: sizingGrowthInput.value,
+            indexOverheadPercent: sizingIndexOverheadInput.value,
+          }),
+        }
       );
-      analysisOutputTitle.textContent = "Sizing Recommendation";
+      analysisOutputTitle.textContent = result.data && result.data.needsMoreInfo
+        ? "More Information Needed"
+        : "Sizing Recommendation";
       analysisOutput.textContent = result.text;
       analysisOutputWrap.classList.remove("hidden");
     } catch (err) {
       alert(err.message);
     } finally {
-      sizingBtn.disabled = false;
+      sizingCalculateBtn.disabled = false;
     }
   });
 
@@ -592,7 +610,9 @@
       const result = await api(
         `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/analysis/schema`
       );
-      analysisOutputTitle.textContent = "Schema Design Findings";
+      analysisOutputTitle.textContent = result.data && result.data.needsMoreInfo
+        ? "More Information Needed"
+        : "Schema Design Findings";
       analysisOutput.textContent = result.text;
       analysisOutputWrap.classList.remove("hidden");
     } catch (err) {
