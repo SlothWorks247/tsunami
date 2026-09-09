@@ -4,7 +4,11 @@
 
 A single-user (per team), multi-customer web app for capturing engagement notes (text, files, images) per customer + app, and generating heuristic Atlas sizing recommendations and schema design findings from that data — output as copy-paste-ready text for use in decks/docs.
 
-![Notes to Sizing/POV — main notes view](screenshots/notes-view.png)
+![Notes to Sizing/POV — main notes view with notes list and Analysis card](screenshots/notes-view.png)
+
+![Sizing Recommendation calculator, showing the discovery-questions fallback when no data size is provided](screenshots/sizing-calculator.png)
+
+![Settings page — Tier Pricing table](screenshots/settings-pricing.png)
 
 ## Features
 
