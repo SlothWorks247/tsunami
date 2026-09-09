@@ -7,7 +7,6 @@
 
   // ---------- Connection screen ----------
   const viewConnect = document.getElementById("view-connect");
-  const appTabs = document.getElementById("app-tabs");
   const connectionIndicator = document.getElementById("connection-indicator");
   const connectionIndicatorText = document.getElementById(
     "connection-indicator-text"
@@ -30,14 +29,12 @@
     viewConnect.classList.add("active");
     document.getElementById("view-notes").classList.remove("active");
     document.getElementById("view-settings").classList.remove("active");
-    appTabs.classList.add("hidden");
     connectionIndicator.classList.add("hidden");
   }
 
   function showConnectedUI(host) {
     viewConnect.classList.remove("active");
     document.getElementById("view-notes").classList.add("active");
-    appTabs.classList.remove("hidden");
     connectionIndicator.classList.remove("hidden");
     connectionIndicatorText.textContent = `Connected to ${host}`;
     loadCustomers();
@@ -666,7 +663,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tiers, discountPercent }),
       });
-      setStatus(pricingStatus, "Pricing config saved.");
+      switchTab("notes");
     } catch (err) {
       setStatus(pricingStatus, err.message, true);
     }

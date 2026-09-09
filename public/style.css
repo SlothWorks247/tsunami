@@ -46,12 +46,6 @@ body {
   max-width: 640px;
 }
 
-.tabs {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-
 .connection-indicator {
   margin-left: auto;
   display: flex;
@@ -73,9 +67,9 @@ body {
 }
 
 .tab-btn {
-  background: transparent;
+  background: white;
   border: 1px solid var(--mdb-forest);
-  color: white;
+  color: var(--mdb-forest);
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
@@ -84,6 +78,7 @@ body {
 
 .tab-btn.active {
   background: var(--mdb-forest);
+  color: white;
 }
 
 main {
@@ -381,15 +376,30 @@ form input, form textarea {
   color: var(--mdb-forest);
 }
 
-.analysis-steps {
+.executive-summary-box {
+  background: var(--mdb-bg);
+  border: 1px dashed var(--mdb-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.executive-summary-box h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--mdb-forest);
+}
+
+.coming-soon-text {
+  margin: 0;
   font-size: 13px;
-  color: #4B5B57;
-  line-height: 1.6;
-  margin: 0 0 14px;
+  font-style: italic;
+  color: #6B7C78;
 }
 
 .analysis-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 

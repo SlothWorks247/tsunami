@@ -1,8 +1,4 @@
-const fs = require("fs");
-const path = require("path");
 const { MongoClient, GridFSBucket } = require("mongodb");
-
-const CONNECTION_FILE = path.join(__dirname, ".connection.json");
 
 let mongoClient = null;
 let connectedHost = null;
@@ -72,37 +68,11 @@ function getConnectedHost() {
   return connectedHost;
 }
 
-function loadPersistedConnection() {
-  try {
-    if (!fs.existsSync(CONNECTION_FILE)) return null;
-    const raw = fs.readFileSync(CONNECTION_FILE, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function savePersistedConnection({ host, username, password }) {
-  fs.writeFileSync(
-    CONNECTION_FILE,
-    JSON.stringify({ host, username, password }, null, 2),
-    "utf8"
-  );
-}
-
-function clearPersistedConnection() {
-  try {
-    if (fs.existsSync(CONNECTION_FILE)) fs.unlinkSync(CONNECTION_FILE);
-  } catch {
-    // ignore
-  }
-}
-
 /**
  * Attempts to connect to Atlas with the given credentials. On success,
- * seeds the pricing config, persists the credentials locally, and stores
- * the client for the rest of the app to use. Throws with a clear message
- * on failure.
+ * seeds the pricing config and stores the client (in memory only - not
+ * persisted anywhere) for the rest of the app to use. Throws with a clear
+ * message on failure.
  */
 async function connectWithCredentials({ host, username, password }) {
   if (!host || !host.trim()) throw new Error("Cluster host is required");
@@ -134,7 +104,6 @@ async function connectWithCredentials({ host, username, password }) {
   connectedHost = host.trim().replace(/^mongodb(\+srv)?:\/\//, "").replace(/\/.*$/, "");
 
   await seedPricingConfig();
-  savePersistedConnection({ host, username, password });
 
   return { host: connectedHost };
 }
@@ -145,25 +114,6 @@ async function disconnect() {
   }
   mongoClient = null;
   connectedHost = null;
-  clearPersistedConnection();
-}
-
-/**
- * Called once at server startup. Tries to silently reconnect using any
- * previously persisted credentials. Failures are swallowed - the app just
- * stays disconnected and the UI will show the connect screen.
- */
-async function tryAutoReconnect() {
-  const persisted = loadPersistedConnection();
-  if (!persisted) return false;
-  try {
-    await connectWithCredentials(persisted);
-    console.log(`Auto-reconnected to ${connectedHost} using saved credentials.`);
-    return true;
-  } catch (err) {
-    console.warn("Auto-reconnect failed:", err.message);
-    return false;
-  }
 }
 
 function getClient() {
@@ -254,7 +204,6 @@ module.exports = {
   getConnectedHost,
   connectWithCredentials,
   disconnect,
-  tryAutoReconnect,
   getPlatformDb,
   getCustomersCollection,
   getPricingConfigCollection,

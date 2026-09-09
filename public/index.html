@@ -17,10 +17,6 @@
       <span id="connection-indicator-text"></span>
       <button id="disconnect-btn" class="btn-secondary" type="button">Disconnect</button>
     </div>
-    <nav id="app-tabs" class="tabs hidden">
-      <button id="tab-notes" class="tab-btn active" type="button">Notes</button>
-      <button id="tab-settings" class="tab-btn" type="button">Settings</button>
-    </nav>
   </header>
 
   <main>
@@ -28,7 +24,7 @@
     <section id="view-connect" class="view active">
       <div class="card connect-card">
         <h2>Connect to MongoDB Atlas</h2>
-        <p class="connect-intro">Enter your Atlas cluster details to get started. These are saved locally on this machine so you won't need to re-enter them next time you run the app here.</p>
+        <p class="connect-intro">Enter your Atlas cluster details to get started. You'll need to re-enter these if you disconnect or restart the server.</p>
         <form id="connect-form">
           <label for="connect-host">Cluster Host</label>
           <input id="connect-host" type="text" placeholder="cluster0.xxxxx.mongodb.net" required />
@@ -112,16 +108,19 @@
 
         <div class="card analysis-card">
           <h2>Analysis</h2>
-          <p class="analysis-steps">
-            1. Add all notes you have about the customer and their app, and requirements.<br />
-            2. Click on "Generate Embeddings" to create the vector embeddings in Atlas.<br />
-            3. Click on "Sizing Recommendation" to run sizing calculator.<br />
-            4. Click on "Suggest Data Model" to see schema suggestions.
-          </p>
+
+          <div class="executive-summary-box">
+            <h3>Executive Summary</h3>
+            <p class="coming-soon-text">Coming soon — an AI-powered executive summary of your notes will appear here.</p>
+          </div>
+
           <div class="analysis-buttons">
-            <button id="embeddings-btn" class="btn-primary" type="button" disabled title="Coming soon — will generate vector embeddings from stored notes/documents in Atlas">Generate Embeddings</button>
-            <button id="sizing-btn" class="btn-primary" type="button">Sizing Recommendation</button>
-            <button id="schema-btn" class="btn-primary" type="button">Suggest Data Model</button>
+            <button id="tab-notes" class="tab-btn active" type="button">Notes</button>
+            <button id="tab-settings" class="tab-btn" type="button">Settings</button>
+            <button id="embeddings-btn" class="btn-primary" type="button" disabled title="Coming soon: Create the vector embeddings in Atlas">Generate Embeddings</button>
+            <button id="update-summary-btn" class="btn-primary" type="button" disabled title="Coming soon: Update the Executive Summary with an AI-generated summary of your notes">Update Summary</button>
+            <button id="sizing-btn" class="btn-primary" type="button" title="Run the sizing calculator based on settings.">Sizing Recommendation</button>
+            <button id="schema-btn" class="btn-primary" type="button" title="Create a suggested data model to store the customer's data">Suggest Data Model</button>
           </div>
           <div id="analysis-output-wrap" class="hidden">
             <div class="output-header">
@@ -156,7 +155,7 @@
           <label for="global-discount-input">Global Default Discount %</label>
           <input id="global-discount-input" type="number" min="0" max="100" step="0.1" />
         </div>
-        <button id="save-pricing-btn" class="btn-primary" type="button">Save Pricing Config</button>
+        <button id="save-pricing-btn" class="btn-primary" type="button">Save and go back to Notes</button>
         <p id="pricing-status" class="status-msg"></p>
       </div>
 

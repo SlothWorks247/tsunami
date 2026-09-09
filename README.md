@@ -108,7 +108,6 @@ Seeded from real public Atlas pricing (mongodb.com/pricing) on first server star
 │   ├── index.html
 │   ├── style.css
 │   └── script.js
-├── .connection.json           # created at runtime after first successful connect (gitignored, plaintext credentials - see Portability section)
 └── package.json
 ```
 
@@ -134,17 +133,15 @@ This app is designed to be **extracted into a folder and run with zero config fi
    - **Password**
 
    This project uses a **shared Atlas cluster** for the team — get these details from a teammate via a secure channel (Slack DM, password manager, etc.). Make sure your IP is allowed in the Atlas cluster's **Network Access** list (or ask whoever manages the cluster to add it / temporarily allow `0.0.0.0/0` for the hackathon).
-5. Once connected, the app remembers these details locally (written to `.connection.json` in the project folder) — restarting the server later will auto-reconnect without asking again. Use the **Disconnect** button in the header if you need to switch to a different cluster.
-
-⚠️ **Security note:** `.connection.json` stores the password in **plaintext** on your local machine so the app can auto-reconnect. It's gitignored and never committed, but don't share this file or commit it manually. This is an intentional tradeoff for hackathon portability — not recommended for a real production deployment.
+5. The connection lives only in memory for as long as the server process is running — nothing is written to disk. If you restart the server or click **Disconnect** in the header, you'll need to re-enter your connection details.
 
 ## API Reference
 
 | Method | Route | Description |
 |---|---|---|
 | GET | `/api/connection/status` | Check whether the app is currently connected to a database |
-| POST | `/api/connection` | Connect `{ host, username, password }` — persists locally on success |
-| POST | `/api/connection/disconnect` | Disconnect and forget the persisted connection |
+| POST | `/api/connection` | Connect `{ host, username, password }` — kept in memory only, not persisted |
+| POST | `/api/connection/disconnect` | Disconnect from the current database |
 | GET | `/api/customers` | List all customers |
 | POST | `/api/customers` | Create a customer `{ name }` |
 | PATCH | `/api/customers/:customerSlug` | Update a customer's `discountPercent` override |
@@ -165,7 +162,6 @@ This app is designed to be **extracted into a folder and run with zero config fi
 ## Known Limitations / Explicitly Deferred (future work)
 
 - **No authentication** — single-user-per-team app for now; anyone with the shared connection string/app URL has full access.
-- **Local credential storage** — `.connection.json` stores the Atlas password in plaintext locally for auto-reconnect convenience. Fine for a portable hackathon demo, not suitable for production as-is.
 - **No real document/presentation file export** — sizing/schema outputs are presentation-ready *text* meant to be copy-pasted into slides/docs, not generated PPTX/DOCX/PDF files yet.
 - **No Salesforce Notes integration yet** — the `source` and `externalId` fields exist on note documents specifically to make this easier to add later (dedupe/upsert by external ID), but no sync logic exists yet.
 - **No Atlas Admin API integration** — sizing recommendations are heuristic, computed only from `collStats()`/`db.stats()` data already visible to the driver; no live cluster metrics or Performance Advisor integration.

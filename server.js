@@ -1,7 +1,6 @@
 const path = require("path");
 const express = require("express");
 
-const { tryAutoReconnect } = require("./db");
 const { requireConnection } = require("./middleware");
 const connectionRouter = require("./routes/connection");
 const customersRouter = require("./routes/customers");
@@ -23,15 +22,10 @@ app.use(
   notesRouter
 );
 
-async function start() {
+function start() {
   app.listen(PORT, () => {
     console.log(`Notes to Sizing/POV running at http://localhost:${PORT}`);
   });
-
-  // Attempt a silent reconnect using any previously saved credentials.
-  // If this fails or nothing is saved, the app just stays disconnected
-  // and the frontend will show the connect screen.
-  await tryAutoReconnect();
 }
 
 start();
