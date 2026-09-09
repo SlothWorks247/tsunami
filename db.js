@@ -216,15 +216,34 @@ function getAppBucket(dbSlug, appSlug) {
 }
 
 /**
- * Create the recommended indexes for a newly created app's notes collection.
- * Idempotent - safe to call more than once.
+ * Create the recommended indexes for an app's notes collection. Idempotent
+ * and self-healing - safe to call every time a note is created, not just
+ * when the app is first created.
+ *
+ * Note: externalId uses a *partial* index (only indexing documents where
+ * externalId is an actual string), not a sparse index. A plain sparse index
+ * would still index documents where externalId is explicitly set to null
+ * (every manual note has externalId: null by design), causing a duplicate
+ * key error as soon as a second note was created. If an older, broken
+ * sparse index exists from a previous version of this app, it's dropped
+ * and replaced automatically.
  */
 async function ensureAppIndexes(dbSlug, appSlug) {
   const notes = getAppNotesCollection(dbSlug, appSlug);
   await notes.createIndex({ createdAt: -1 });
+
+  try {
+    await notes.dropIndex("externalId_1");
+  } catch {
+    // Index didn't exist - nothing to clean up.
+  }
+
   await notes.createIndex(
     { externalId: 1 },
-    { unique: true, sparse: true }
+    {
+      unique: true,
+      partialFilterExpression: { externalId: { $type: "string" } },
+    }
   );
 }
 

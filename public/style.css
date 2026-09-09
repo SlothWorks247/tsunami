@@ -118,19 +118,25 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 24px;
-  align-items: flex-end;
+  align-items: flex-start;
 }
 
 .selector-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .selector-group label {
   font-size: 12px;
   font-weight: 600;
   color: var(--mdb-forest);
+}
+
+.selector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .selector-group select {
@@ -195,6 +201,12 @@ form input, form textarea {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-top: 6px;
+}
+
+.inline-form .btn-primary,
+.inline-form .btn-secondary {
+  margin-top: 0;
 }
 
 .hidden {

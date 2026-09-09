@@ -47,28 +47,32 @@
       <div class="selector-bar card">
         <div class="selector-group">
           <label for="customer-select">Customer</label>
-          <select id="customer-select">
-            <option value="">-- Select customer --</option>
-          </select>
-          <button id="new-customer-btn" class="btn-secondary" type="button">+ New</button>
-        </div>
-        <div id="new-customer-form" class="inline-form hidden">
-          <input id="new-customer-name" type="text" placeholder="Customer name" />
-          <button id="save-customer-btn" class="btn-primary" type="button">Save</button>
-          <button id="cancel-customer-btn" class="btn-secondary" type="button">Cancel</button>
+          <div class="selector-row">
+            <select id="customer-select">
+              <option value="">-- Select customer --</option>
+            </select>
+            <button id="new-customer-btn" class="btn-secondary" type="button">+ New</button>
+          </div>
+          <div id="new-customer-form" class="inline-form hidden">
+            <input id="new-customer-name" type="text" placeholder="Customer name" />
+            <button id="save-customer-btn" class="btn-primary" type="button">Save</button>
+            <button id="cancel-customer-btn" class="btn-secondary" type="button">Cancel</button>
+          </div>
         </div>
 
         <div class="selector-group">
           <label for="app-select">App</label>
-          <select id="app-select" disabled>
-            <option value="">-- Select app --</option>
-          </select>
-          <button id="new-app-btn" class="btn-secondary" type="button" disabled>+ New</button>
-        </div>
-        <div id="new-app-form" class="inline-form hidden">
-          <input id="new-app-name" type="text" placeholder="App name" />
-          <button id="save-app-btn" class="btn-primary" type="button">Save</button>
-          <button id="cancel-app-btn" class="btn-secondary" type="button">Cancel</button>
+          <div class="selector-row">
+            <select id="app-select" disabled>
+              <option value="">-- Select app --</option>
+            </select>
+            <button id="new-app-btn" class="btn-secondary" type="button" disabled>+ New</button>
+          </div>
+          <div id="new-app-form" class="inline-form hidden">
+            <input id="new-app-name" type="text" placeholder="App name" />
+            <button id="save-app-btn" class="btn-primary" type="button">Save</button>
+            <button id="cancel-app-btn" class="btn-secondary" type="button">Cancel</button>
+          </div>
         </div>
       </div>
 

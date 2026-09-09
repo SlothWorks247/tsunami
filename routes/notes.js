@@ -5,6 +5,7 @@ const {
   getAppNotesCollection,
   getAppBucket,
   getCustomersCollection,
+  ensureAppIndexes,
 } = require("../db");
 const { generateSizingReport } = require("../services/sizingAnalyzer");
 const { generateSchemaReport } = require("../services/schemaLinter");
@@ -63,6 +64,11 @@ router.post("/notes", async (req, res) => {
       return res.status(400).json({ error: "Note body is required" });
     }
 
+    // Self-heal indexes in case this app's collection was created before
+    // the externalId index was fixed to a partial index (older apps could
+    // otherwise hit a duplicate key error on the second note).
+    await ensureAppIndexes(customerSlug, appSlug);
+
     const now = new Date();
     const doc = {
       title: title.trim(),
@@ -98,6 +104,10 @@ router.post("/notes/upload", upload.single("file"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
     }
+
+    // Self-heal indexes in case this app's collection was created before
+    // the externalId index was fixed to a partial index.
+    await ensureAppIndexes(customerSlug, appSlug);
 
     const bucket = getAppBucket(customerSlug, appSlug);
     const uploadStream = bucket.openUploadStream(req.file.originalname, {

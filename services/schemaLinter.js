@@ -143,7 +143,7 @@ async function generateSchemaReport(customerSlug, appSlug) {
     `- createdAt index: ${hasCreatedAtIndex ? "present" : "MISSING - recommended for sorting notes by date"}`
   );
   lines.push(
-    `- externalId unique/sparse index: ${
+    `- externalId unique/partial index: ${
       hasExternalIdIndex ? "present" : "MISSING - recommended for future external sync dedupe (e.g. Salesforce)"
     }`
   );
