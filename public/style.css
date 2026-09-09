@@ -70,7 +70,7 @@ body {
   background: white;
   border: 1px solid var(--mdb-forest);
   color: var(--mdb-forest);
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -400,7 +400,12 @@ form input, form textarea {
 .analysis-buttons {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
+}
+
+.analysis-buttons .btn-primary {
+  margin-top: 0;
 }
 
 .output-header {
