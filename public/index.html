@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notes to Sizing/POV</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <img src="assets/mongodb-logo.svg" alt="MongoDB" class="logo" />
+    <div class="header-text">
+      <h1>Notes to Sizing/POV</h1>
+      <p class="byline">A tool for SA's to enter in notes from various sources and then auto generate a sizing presentation, design document, schema document...</p>
+    </div>
+    <nav class="tabs">
+      <button id="tab-notes" class="tab-btn active" type="button">Notes</button>
+      <button id="tab-settings" class="tab-btn" type="button">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- NOTES VIEW -->
+    <section id="view-notes" class="view active">
+      <div class="selector-bar card">
+        <div class="selector-group">
+          <label for="customer-select">Customer</label>
+          <select id="customer-select">
+            <option value="">-- Select customer --</option>
+          </select>
+          <button id="new-customer-btn" class="btn-secondary" type="button">+ New</button>
+        </div>
+        <div id="new-customer-form" class="inline-form hidden">
+          <input id="new-customer-name" type="text" placeholder="Customer name" />
+          <button id="save-customer-btn" class="btn-primary" type="button">Save</button>
+          <button id="cancel-customer-btn" class="btn-secondary" type="button">Cancel</button>
+        </div>
+
+        <div class="selector-group">
+          <label for="app-select">App</label>
+          <select id="app-select" disabled>
+            <option value="">-- Select app --</option>
+          </select>
+          <button id="new-app-btn" class="btn-secondary" type="button" disabled>+ New</button>
+        </div>
+        <div id="new-app-form" class="inline-form hidden">
+          <input id="new-app-name" type="text" placeholder="App name" />
+          <button id="save-app-btn" class="btn-primary" type="button">Save</button>
+          <button id="cancel-app-btn" class="btn-secondary" type="button">Cancel</button>
+        </div>
+      </div>
+
+      <div id="app-workspace" class="hidden">
+        <div class="workspace-grid">
+          <div class="card add-note-card">
+            <h2>Add Note</h2>
+            <div class="note-type-tabs">
+              <button id="note-type-text" class="note-type-btn active" type="button">Text</button>
+              <button id="note-type-file" class="note-type-btn" type="button">File / Image</button>
+            </div>
+
+            <form id="text-note-form">
+              <label for="text-note-title">Title</label>
+              <input id="text-note-title" type="text" required />
+              <label for="text-note-body">Note</label>
+              <textarea id="text-note-body" rows="6" required></textarea>
+              <button type="submit" class="btn-primary">Save Note</button>
+            </form>
+
+            <form id="file-note-form" class="hidden">
+              <label for="file-note-title">Title (optional)</label>
+              <input id="file-note-title" type="text" />
+              <label for="file-note-input">File</label>
+              <input id="file-note-input" type="file" required />
+              <button type="submit" class="btn-primary">Upload</button>
+            </form>
+
+            <p id="note-status" class="status-msg"></p>
+          </div>
+
+          <div class="card notes-list-card">
+            <h2>Notes</h2>
+            <ul id="notes-list"></ul>
+          </div>
+        </div>
+
+        <div class="card analysis-card">
+          <h2>Analysis</h2>
+          <div class="analysis-buttons">
+            <button id="sizing-btn" class="btn-primary" type="button">Get Sizing Recommendation</button>
+            <button id="schema-btn" class="btn-primary" type="button">Analyze Schema</button>
+          </div>
+          <div id="analysis-output-wrap" class="hidden">
+            <div class="output-header">
+              <span id="analysis-output-title"></span>
+              <button id="copy-output-btn" class="btn-secondary" type="button">Copy to clipboard</button>
+            </div>
+            <pre id="analysis-output"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS VIEW -->
+    <section id="view-settings" class="view">
+      <div class="card">
+        <h2>Tier Pricing</h2>
+        <table id="tiers-table">
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>RAM (GB)</th>
+              <th>Storage (GB)</th>
+              <th>vCPUs</th>
+              <th>Monthly Price ($)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tiers-tbody"></tbody>
+        </table>
+        <button id="add-tier-row-btn" class="btn-secondary" type="button">+ Add Tier</button>
+        <div class="global-discount-row">
+          <label for="global-discount-input">Global Default Discount %</label>
+          <input id="global-discount-input" type="number" min="0" max="100" step="0.1" />
+        </div>
+        <button id="save-pricing-btn" class="btn-primary" type="button">Save Pricing Config</button>
+        <p id="pricing-status" class="status-msg"></p>
+      </div>
+
+      <div class="card">
+        <h2>Customer Discount Overrides</h2>
+        <table id="customer-discounts-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Discount % (blank = use global default)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="customer-discounts-tbody"></tbody>
+        </table>
+        <p id="customer-discount-status" class="status-msg"></p>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
