@@ -112,10 +112,16 @@
 
         <div class="card analysis-card">
           <h2>Analysis</h2>
+          <p class="analysis-steps">
+            1. Add all notes you have about the customer and their app, and requirements.<br />
+            2. Click on "Generate Embeddings" to create the vector embeddings in Atlas.<br />
+            3. Click on "Sizing Recommendation" to run sizing calculator.<br />
+            4. Click on "Suggest Data Model" to see schema suggestions.
+          </p>
           <div class="analysis-buttons">
-            <button id="sizing-btn" class="btn-primary" type="button">Get Sizing Recommendation</button>
-            <button id="schema-btn" class="btn-primary" type="button">Analyze Schema</button>
             <button id="embeddings-btn" class="btn-primary" type="button" disabled title="Coming soon — will generate vector embeddings from stored notes/documents in Atlas">Generate Embeddings</button>
+            <button id="sizing-btn" class="btn-primary" type="button">Sizing Recommendation</button>
+            <button id="schema-btn" class="btn-primary" type="button">Suggest Data Model</button>
           </div>
           <div id="analysis-output-wrap" class="hidden">
             <div class="output-header">

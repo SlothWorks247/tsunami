@@ -381,6 +381,13 @@ form input, form textarea {
   color: var(--mdb-forest);
 }
 
+.analysis-steps {
+  font-size: 13px;
+  color: #4B5B57;
+  line-height: 1.6;
+  margin: 0 0 14px;
+}
+
 .analysis-buttons {
   display: flex;
   gap: 12px;
