@@ -4,6 +4,8 @@
 
 A single-user (per team), multi-customer web app for capturing engagement notes (text, files, images) per customer + app, and generating heuristic Atlas sizing recommendations and schema design findings from that data — output as copy-paste-ready text for use in decks/docs.
 
+![Notes to Sizing/POV — main notes view](screenshots/notes-view.png)
+
 ## Features
 
 - **Customer → App → Notes hierarchy** — select or create a customer, then select or create an app for that customer, then capture notes scoped to that pair.
@@ -114,7 +116,12 @@ Seeded from real public Atlas pricing (mongodb.com/pricing) on first server star
 
 This app is designed to be **extracted into a folder and run with zero config file editing** — ideal for hackathon judges or new teammates.
 
-1. Get the code (clone or extract a zip) and open a terminal in that folder.
+1. Get the code and open a terminal in that folder:
+   ```
+   git clone https://github.com/SlothWorks247/tsunami.git
+   cd tsunami
+   ```
+   (or extract a zip of the repo instead of cloning, if that's how it was shared with you)
 2. Run the start script:
    - **Mac/Linux:** `./run.sh`
    - **Windows:** double-click `start.bat` (or run it from a terminal)
