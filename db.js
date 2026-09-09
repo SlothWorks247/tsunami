@@ -1,16 +1,11 @@
+const fs = require("fs");
+const path = require("path");
 const { MongoClient, GridFSBucket } = require("mongodb");
 
-const uri = process.env.ATLAS_URI;
+const CONNECTION_FILE = path.join(__dirname, ".connection.json");
 
-if (!uri) {
-  throw new Error(
-    "ATLAS_URI is not set. Copy .env.example to .env and fill in your Atlas connection string."
-  );
-}
-
-const client = new MongoClient(uri);
-
-let connected = false;
+let mongoClient = null;
+let connectedHost = null;
 
 /**
  * Turn an arbitrary display name (customer or app name) into a safe,
@@ -56,19 +51,130 @@ const DEFAULT_PRICING_TIERS = [
 ];
 
 /**
- * Connect the shared MongoClient and make sure the platform database has a
- * seeded pricingConfig document. Safe to call multiple times.
+ * Builds a full mongodb+srv connection string from separate host/username/
+ * password fields, URL-encoding credentials so special characters are safe.
  */
-async function connect() {
-  if (connected) return client;
-  await client.connect();
-  connected = true;
+function buildConnectionUri({ host, username, password }) {
+  const cleanHost = String(host || "")
+    .trim()
+    .replace(/^mongodb(\+srv)?:\/\//, "")
+    .replace(/\/.*$/, "");
+  const user = encodeURIComponent(String(username || "").trim());
+  const pass = encodeURIComponent(String(password || "").trim());
+  return `mongodb+srv://${user}:${pass}@${cleanHost}/?retryWrites=true&w=majority&appName=NotesToSizingPOV`;
+}
+
+function isConnected() {
+  return mongoClient !== null;
+}
+
+function getConnectedHost() {
+  return connectedHost;
+}
+
+function loadPersistedConnection() {
+  try {
+    if (!fs.existsSync(CONNECTION_FILE)) return null;
+    const raw = fs.readFileSync(CONNECTION_FILE, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedConnection({ host, username, password }) {
+  fs.writeFileSync(
+    CONNECTION_FILE,
+    JSON.stringify({ host, username, password }, null, 2),
+    "utf8"
+  );
+}
+
+function clearPersistedConnection() {
+  try {
+    if (fs.existsSync(CONNECTION_FILE)) fs.unlinkSync(CONNECTION_FILE);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Attempts to connect to Atlas with the given credentials. On success,
+ * seeds the pricing config, persists the credentials locally, and stores
+ * the client for the rest of the app to use. Throws with a clear message
+ * on failure.
+ */
+async function connectWithCredentials({ host, username, password }) {
+  if (!host || !host.trim()) throw new Error("Cluster host is required");
+  if (!username || !username.trim()) throw new Error("Username is required");
+  if (!password) throw new Error("Password is required");
+
+  const uri = buildConnectionUri({ host, username, password });
+  const candidateClient = new MongoClient(uri, {
+    serverSelectionTimeoutMS: 8000,
+  });
+
+  try {
+    await candidateClient.connect();
+    // Confirm auth actually works, not just TCP/TLS connectivity.
+    await candidateClient.db("admin").command({ ping: 1 });
+  } catch (err) {
+    await candidateClient.close().catch(() => {});
+    throw new Error(
+      `Failed to connect: ${err.message || "unknown error"}`
+    );
+  }
+
+  // Tear down any previous connection before adopting the new one.
+  if (mongoClient) {
+    await mongoClient.close().catch(() => {});
+  }
+
+  mongoClient = candidateClient;
+  connectedHost = host.trim().replace(/^mongodb(\+srv)?:\/\//, "").replace(/\/.*$/, "");
+
   await seedPricingConfig();
-  return client;
+  savePersistedConnection({ host, username, password });
+
+  return { host: connectedHost };
+}
+
+async function disconnect() {
+  if (mongoClient) {
+    await mongoClient.close().catch(() => {});
+  }
+  mongoClient = null;
+  connectedHost = null;
+  clearPersistedConnection();
+}
+
+/**
+ * Called once at server startup. Tries to silently reconnect using any
+ * previously persisted credentials. Failures are swallowed - the app just
+ * stays disconnected and the UI will show the connect screen.
+ */
+async function tryAutoReconnect() {
+  const persisted = loadPersistedConnection();
+  if (!persisted) return false;
+  try {
+    await connectWithCredentials(persisted);
+    console.log(`Auto-reconnected to ${connectedHost} using saved credentials.`);
+    return true;
+  } catch (err) {
+    console.warn("Auto-reconnect failed:", err.message);
+    return false;
+  }
+}
+
+function getClient() {
+  if (!mongoClient) {
+    throw new Error("Not connected to a database yet");
+  }
+  return mongoClient;
 }
 
 async function seedPricingConfig() {
-  const platformDb = client.db("platform");
+  const platformDb = getClient().db("platform");
   const existing = await platformDb
     .collection("pricingConfig")
     .findOne({ _id: "default" });
@@ -84,7 +190,7 @@ async function seedPricingConfig() {
 }
 
 function getPlatformDb() {
-  return client.db("platform");
+  return getClient().db("platform");
 }
 
 function getCustomersCollection() {
@@ -96,7 +202,7 @@ function getPricingConfigCollection() {
 }
 
 function getCustomerDb(dbSlug) {
-  return client.db(dbSlug);
+  return getClient().db(dbSlug);
 }
 
 function getAppNotesCollection(dbSlug, appSlug) {
@@ -123,9 +229,13 @@ async function ensureAppIndexes(dbSlug, appSlug) {
 }
 
 module.exports = {
-  client,
-  connect,
   slugify,
+  buildConnectionUri,
+  isConnected,
+  getConnectedHost,
+  connectWithCredentials,
+  disconnect,
+  tryAutoReconnect,
   getPlatformDb,
   getCustomersCollection,
   getPricingConfigCollection,

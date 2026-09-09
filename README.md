@@ -18,7 +18,8 @@ A single-user (per team), multi-customer web app for capturing engagement notes 
 - Node.js + Express (backend API)
 - MongoDB Atlas driver (`mongodb` npm package) + GridFS for file storage
 - Plain HTML/CSS/vanilla JS frontend (no build step, no framework)
-- `dotenv` for environment config, `multer` for file upload handling
+- `multer` for file upload handling
+- No `.env`/config files required — the app asks for your Atlas connection details in-browser on first run (see **Portability** below)
 
 ## Architecture
 
@@ -87,58 +88,56 @@ Seeded from real public Atlas pricing (mongodb.com/pricing) on first server star
 
 ```
 .
-├── .env                     # local secrets (gitignored)
-├── .env.example             # template for .env
-├── server.js                # Express app entry point
-├── db.js                    # Mongo client singleton, per-customer/app db/collection/bucket helpers, pricingConfig seeding
+├── run.sh                    # one-step start script (Mac/Linux): npm install && npm start
+├── start.bat                 # one-step start script (Windows)
+├── server.js                 # Express app entry point
+├── db.js                     # dynamic Mongo connection, per-customer/app db/collection/bucket helpers, pricingConfig seeding
+├── middleware.js              # requireConnection guard for data routes
 ├── routes/
-│   ├── customers.js         # customer + app registry endpoints
-│   ├── config.js            # pricing config endpoints
-│   └── notes.js             # notes + file endpoints, scoped by customer/app
+│   ├── connection.js          # connect/disconnect/status endpoints
+│   ├── customers.js           # customer + app registry endpoints
+│   ├── config.js              # pricing config endpoints
+│   └── notes.js               # notes + file endpoints, scoped by customer/app
 ├── services/
-│   ├── sizingAnalyzer.js     # heuristic Atlas tier estimator
-│   └── schemaLinter.js       # schema design lint checks
+│   ├── sizingAnalyzer.js      # heuristic Atlas tier estimator
+│   └── schemaLinter.js        # schema design lint checks
 ├── public/
 │   ├── assets/mongodb-logo.svg
 │   ├── index.html
 │   ├── style.css
 │   └── script.js
+├── .connection.json           # created at runtime after first successful connect (gitignored, plaintext credentials - see Portability section)
 └── package.json
 ```
 
-## Setup & Run
+## Setup & Run (Portability)
 
-This project uses a **shared Atlas cluster** for the team — everyone on the team points their local `.env` at the same connection string so you all see the same customers/apps/notes.
+This app is designed to be **extracted into a folder and run with zero config file editing** — ideal for hackathon judges or new teammates.
 
-1. Clone the repo:
-   ```
-   git clone <repo-url>
-   cd <repo>
-   ```
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Copy the env template and fill in the shared connection string (get this from a teammate via a secure channel — Slack DM, password manager, etc. — **never** commit it or paste it into an issue/PR):
-   ```
-   cp .env.example .env
-   ```
-   Edit `.env`:
-   ```
-   ATLAS_URI=<shared connection string>
-   PORT=3000
-   ```
-4. Make sure your IP is allowed in the Atlas cluster's **Network Access** list (or ask whoever manages the cluster to add it / temporarily allow `0.0.0.0/0` for the hackathon).
-5. Start the app:
-   ```
-   npm start
-   ```
-6. Open [http://localhost:3000](http://localhost:3000).
+1. Get the code (clone or extract a zip) and open a terminal in that folder.
+2. Run the start script:
+   - **Mac/Linux:** `./run.sh`
+   - **Windows:** double-click `start.bat` (or run it from a terminal)
+
+   Either script just runs `npm install` followed by `npm start` — equivalent to running those two commands yourself if you'd rather do that.
+3. Open [http://localhost:3000](http://localhost:3000).
+4. On first run, you'll see a **Connect to MongoDB Atlas** screen asking for:
+   - **Cluster Host** — e.g. `cluster0.xxxxx.mongodb.net` (no `mongodb+srv://` prefix, no embedded credentials)
+   - **Username**
+   - **Password**
+
+   This project uses a **shared Atlas cluster** for the team — get these details from a teammate via a secure channel (Slack DM, password manager, etc.). Make sure your IP is allowed in the Atlas cluster's **Network Access** list (or ask whoever manages the cluster to add it / temporarily allow `0.0.0.0/0` for the hackathon).
+5. Once connected, the app remembers these details locally (written to `.connection.json` in the project folder) — restarting the server later will auto-reconnect without asking again. Use the **Disconnect** button in the header if you need to switch to a different cluster.
+
+⚠️ **Security note:** `.connection.json` stores the password in **plaintext** on your local machine so the app can auto-reconnect. It's gitignored and never committed, but don't share this file or commit it manually. This is an intentional tradeoff for hackathon portability — not recommended for a real production deployment.
 
 ## API Reference
 
 | Method | Route | Description |
 |---|---|---|
+| GET | `/api/connection/status` | Check whether the app is currently connected to a database |
+| POST | `/api/connection` | Connect `{ host, username, password }` — persists locally on success |
+| POST | `/api/connection/disconnect` | Disconnect and forget the persisted connection |
 | GET | `/api/customers` | List all customers |
 | POST | `/api/customers` | Create a customer `{ name }` |
 | PATCH | `/api/customers/:customerSlug` | Update a customer's `discountPercent` override |
@@ -156,6 +155,7 @@ This project uses a **shared Atlas cluster** for the team — everyone on the te
 ## Known Limitations / Explicitly Deferred (future work)
 
 - **No authentication** — single-user-per-team app for now; anyone with the shared connection string/app URL has full access.
+- **Local credential storage** — `.connection.json` stores the Atlas password in plaintext locally for auto-reconnect convenience. Fine for a portable hackathon demo, not suitable for production as-is.
 - **No real document/presentation file export** — sizing/schema outputs are presentation-ready *text* meant to be copy-pasted into slides/docs, not generated PPTX/DOCX/PDF files yet.
 - **No Salesforce Notes integration yet** — the `source` and `externalId` fields exist on note documents specifically to make this easier to add later (dedupe/upsert by external ID), but no sync logic exists yet.
 - **No Atlas Admin API integration** — sizing recommendations are heuristic, computed only from `collStats()`/`db.stats()` data already visible to the driver; no live cluster metrics or Performance Advisor integration.

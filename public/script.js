@@ -5,6 +5,76 @@
     currentAppSlug: null,
   };
 
+  // ---------- Connection screen ----------
+  const viewConnect = document.getElementById("view-connect");
+  const appTabs = document.getElementById("app-tabs");
+  const connectionIndicator = document.getElementById("connection-indicator");
+  const connectionIndicatorText = document.getElementById(
+    "connection-indicator-text"
+  );
+  const disconnectBtn = document.getElementById("disconnect-btn");
+  const connectForm = document.getElementById("connect-form");
+  const connectSubmitBtn = document.getElementById("connect-submit-btn");
+  const connectStatus = document.getElementById("connect-status");
+
+  async function checkConnectionStatus() {
+    const status = await fetch("/api/connection/status").then((r) => r.json());
+    if (status.connected) {
+      showConnectedUI(status.host);
+    } else {
+      showConnectScreen();
+    }
+  }
+
+  function showConnectScreen() {
+    viewConnect.classList.add("active");
+    document.getElementById("view-notes").classList.remove("active");
+    document.getElementById("view-settings").classList.remove("active");
+    appTabs.classList.add("hidden");
+    connectionIndicator.classList.add("hidden");
+  }
+
+  function showConnectedUI(host) {
+    viewConnect.classList.remove("active");
+    document.getElementById("view-notes").classList.add("active");
+    appTabs.classList.remove("hidden");
+    connectionIndicator.classList.remove("hidden");
+    connectionIndicatorText.textContent = `Connected to ${host}`;
+    loadCustomers();
+  }
+
+  connectForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const host = document.getElementById("connect-host").value.trim();
+    const username = document.getElementById("connect-username").value.trim();
+    const password = document.getElementById("connect-password").value;
+    connectSubmitBtn.disabled = true;
+    connectSubmitBtn.textContent = "Connecting...";
+    connectStatus.className = "status-msg";
+    connectStatus.textContent = "";
+    try {
+      const res = await fetch("/api/connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, username, password }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed to connect");
+      showConnectedUI(body.host);
+    } catch (err) {
+      connectStatus.className = "status-msg error";
+      connectStatus.textContent = err.message;
+    } finally {
+      connectSubmitBtn.disabled = false;
+      connectSubmitBtn.textContent = "Connect";
+    }
+  });
+
+  disconnectBtn.addEventListener("click", async () => {
+    await fetch("/api/connection/disconnect", { method: "POST" });
+    showConnectScreen();
+  });
+
   // ---------- Tab navigation ----------
   const tabNotes = document.getElementById("tab-notes");
   const tabSettings = document.getElementById("tab-settings");
@@ -447,5 +517,5 @@
   }
 
   // ---------- Init ----------
-  loadCustomers();
+  checkConnectionStatus();
 })();

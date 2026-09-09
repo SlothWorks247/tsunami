@@ -13,15 +13,37 @@
       <h1>Notes to Sizing/POV</h1>
       <p class="byline">A tool for SA's to enter in notes from various sources and then auto generate a sizing presentation, design document, schema document...</p>
     </div>
-    <nav class="tabs">
+    <div id="connection-indicator" class="connection-indicator hidden">
+      <span id="connection-indicator-text"></span>
+      <button id="disconnect-btn" class="btn-secondary" type="button">Disconnect</button>
+    </div>
+    <nav id="app-tabs" class="tabs hidden">
       <button id="tab-notes" class="tab-btn active" type="button">Notes</button>
       <button id="tab-settings" class="tab-btn" type="button">Settings</button>
     </nav>
   </header>
 
   <main>
+    <!-- CONNECT VIEW -->
+    <section id="view-connect" class="view active">
+      <div class="card connect-card">
+        <h2>Connect to MongoDB Atlas</h2>
+        <p class="connect-intro">Enter your Atlas cluster details to get started. These are saved locally on this machine so you won't need to re-enter them next time you run the app here.</p>
+        <form id="connect-form">
+          <label for="connect-host">Cluster Host</label>
+          <input id="connect-host" type="text" placeholder="cluster0.xxxxx.mongodb.net" required />
+          <label for="connect-username">Username</label>
+          <input id="connect-username" type="text" required />
+          <label for="connect-password">Password</label>
+          <input id="connect-password" type="password" required />
+          <button type="submit" class="btn-primary" id="connect-submit-btn">Connect</button>
+        </form>
+        <p id="connect-status" class="status-msg"></p>
+      </div>
+    </section>
+
     <!-- NOTES VIEW -->
-    <section id="view-notes" class="view active">
+    <section id="view-notes" class="view">
       <div class="selector-bar card">
         <div class="selector-group">
           <label for="customer-select">Customer</label>

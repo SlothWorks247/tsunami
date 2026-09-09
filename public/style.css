@@ -52,6 +52,26 @@ body {
   gap: 8px;
 }
 
+.connection-indicator {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--mdb-spring);
+}
+
+.connect-card {
+  max-width: 480px;
+  margin: 40px auto;
+}
+
+.connect-intro {
+  font-size: 13px;
+  color: #4B5B57;
+  margin-bottom: 8px;
+}
+
 .tab-btn {
   background: transparent;
   border: 1px solid var(--mdb-forest);
