@@ -165,7 +165,6 @@ This app is designed to be **extracted into a folder and run with zero config fi
 
 ## Known Limitations / Explicitly Deferred (future work)
 
-- **No authentication** — single-user-per-team app for now; anyone with the shared connection string/app URL has full access.
 - **No real document/presentation file export** — sizing/schema outputs are presentation-ready *text* meant to be copy-pasted into slides/docs, not generated PPTX/DOCX/PDF files yet.
 - **No Salesforce Notes integration yet** — the `source` and `externalId` fields exist on note documents specifically to make this easier to add later (dedupe/upsert by external ID), but no sync logic exists yet.
 - **No Atlas Admin API integration** — sizing recommendations are heuristic, computed only from `collStats()`/`db.stats()` data already visible to the driver; no live cluster metrics or Performance Advisor integration.
