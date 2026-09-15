@@ -639,7 +639,13 @@ router.get("/files/:fileId", async (req, res) => {
 
     const downloadStream = bucket.openDownloadStream(objectId);
     downloadStream.on("error", () => {
-      res.status(500).end();
+      if (!res.headersSent) res.status(500).end();
+    });
+    // If the client disconnects mid-download (closed tab, aborted request,
+    // dropped SSH tunnel), destroy the GridFS read stream instead of
+    // leaving its cursor and pooled socket open indefinitely.
+    req.on("close", () => {
+      if (!downloadStream.destroyed) downloadStream.destroy();
     });
     downloadStream.pipe(res);
   } catch (err) {

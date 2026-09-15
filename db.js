@@ -67,6 +67,8 @@ async function connect(sessionId, host, username, password) {
   const uri = buildConnectionUri({ host, username, password });
   const candidateClient = new MongoClient(uri, {
     serverSelectionTimeoutMS: 8000,
+    maxPoolSize: 10,
+    maxIdleTimeMS: 30000,
   });
 
   try {
@@ -101,6 +103,44 @@ async function removeClient(sessionId) {
     }
     clients.delete(sessionId);
   }
+}
+
+/**
+ * Closes and removes every tracked MongoClient. Used on process shutdown
+ * so abandoned connection pools don't linger as open sockets after the
+ * server exits.
+ */
+async function closeAllClients() {
+  const ids = Array.from(clients.keys());
+  await Promise.all(ids.map((id) => removeClient(id)));
+}
+
+/**
+ * Periodically compares the sessions tracked by the express-session store
+ * against the sessionIds we're holding MongoClients for, and closes any
+ * MongoClient whose session has expired or been destroyed. Without this,
+ * a browser tab closed without hitting "Disconnect" (or a session that
+ * simply outlives its 8h cookie) leaves its MongoClient - and its whole
+ * connection pool - open forever, slowly exhausting file descriptors.
+ */
+function startSessionSweep(sessionStore, intervalMs = 15 * 60 * 1000) {
+  if (!sessionStore || typeof sessionStore.all !== "function") return null;
+
+  const sweep = () => {
+    sessionStore.all((err, sessions) => {
+      if (err) return;
+      const activeIds = new Set(Object.keys(sessions || {}));
+      for (const sessionId of clients.keys()) {
+        if (!activeIds.has(sessionId)) {
+          removeClient(sessionId).catch(() => {});
+        }
+      }
+    });
+  };
+
+  const timer = setInterval(sweep, intervalMs);
+  if (timer.unref) timer.unref();
+  return timer;
 }
 
 function isConnected(sessionId) {
@@ -242,6 +282,8 @@ module.exports = {
   connect,
   getClient,
   removeClient,
+  closeAllClients,
+  startSessionSweep,
   isConnected,
   getConnectedHost,
   getPlatformDb,
