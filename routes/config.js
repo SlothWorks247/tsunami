@@ -6,7 +6,7 @@ const router = express.Router();
 // GET /api/config/pricing
 router.get("/pricing", async (req, res) => {
   try {
-    const config = await getPricingConfigCollection().findOne({
+    const config = await getPricingConfigCollection(req.sessionID).findOne({
       _id: "default",
     });
     if (!config) {
@@ -54,7 +54,7 @@ router.put("/pricing", async (req, res) => {
       update.discountPercent = discountPercent;
     }
 
-    const result = await getPricingConfigCollection().findOneAndUpdate(
+    const result = await getPricingConfigCollection(req.sessionID).findOneAndUpdate(
       { _id: "default" },
       { $set: update },
       { returnDocument: "after", upsert: true }

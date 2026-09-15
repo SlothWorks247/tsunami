@@ -106,21 +106,43 @@
           </div>
         </div>
 
+        <!-- CHAT SECTION -->
+        <div class="card chat-card">
+          <h2>AI Assistant</h2>
+          <p class="chat-intro">Ask questions about your engagement notes. The assistant uses RAG (Retrieval-Augmented Generation) to find relevant notes and ground its answers.</p>
+          <div id="chat-messages" class="chat-messages"></div>
+          <div class="chat-input-row">
+            <select id="chat-retrieval-mode">
+              <option value="smart">Smart (Vector Search)</option>
+              <option value="normal">Normal (All Notes)</option>
+            </select>
+            <input id="chat-input" type="text" placeholder="Ask a question about your notes..." />
+            <button id="chat-send-btn" class="btn-primary" type="button">Send</button>
+          </div>
+          <div id="chat-meta" class="chat-meta"></div>
+        </div>
+
+        <!-- ACTIVITY LOG -->
+        <div class="card log-card hidden" id="log-card">
+          <h2>Activity Log</h2>
+          <div id="log-output" class="log-output"></div>
+        </div>
+
         <div class="card analysis-card">
           <h2>Analysis</h2>
 
           <div class="executive-summary-box">
             <h3>Executive Summary</h3>
-            <p class="coming-soon-text">Coming soon — an AI-powered executive summary of your notes will appear here.</p>
+            <div id="summary-meta" class="chat-meta"></div>
+            <pre id="executive-summary-output" class="summary-output"></pre>
           </div>
 
           <div class="analysis-buttons">
             <button id="tab-settings" class="tab-btn" type="button">Settings</button>
-            <button id="embeddings-btn" class="btn-primary" type="button" disabled title="Coming soon: Create the vector embeddings in Atlas">Generate Embeddings</button>
-            <button id="update-summary-btn" class="btn-primary" type="button" disabled title="Coming soon: Update the Executive Summary with an AI-generated summary of your notes">Update Summary</button>
+            <button id="update-summary-btn" class="btn-primary" type="button" title="Generate an AI-powered executive summary from your notes">Update Summary</button>
+            <button id="embeddings-btn" class="btn-primary" type="button" title="Generate vector embeddings for all notes in this app">Generate Embeddings</button>
             <button id="sizing-btn" class="btn-primary" type="button" title="Run the sizing calculator based on settings.">Sizing Recommendation</button>
             <button id="schema-btn" class="btn-primary" type="button" title="Create a suggested data model to store the customer's data">Suggest Data Model</button>
-            <button id="synthesize-data-btn" class="btn-primary" type="button" disabled title="Coming soon: Generate synthetic sample data based on the suggested data model">Synthesize Data</button>
           </div>
 
           <div id="sizing-form" class="inline-form sizing-form hidden">
@@ -152,6 +174,83 @@
 
     <!-- SETTINGS VIEW -->
     <section id="view-settings" class="view">
+      <!-- AI Settings -->
+      <div class="card">
+        <h2>AI Configuration</h2>
+
+        <h3 class="settings-section-title">LLM Provider</h3>
+        <p class="settings-hint">Configure an OpenAI-compatible LLM endpoint. Works with Ollama (local), OpenAI, vLLM, LM Studio, etc.</p>
+        <div class="ai-settings-grid">
+          <div class="settings-field">
+            <label for="llm-provider">Provider</label>
+            <select id="llm-provider">
+              <option value="ollama">Ollama (local)</option>
+              <option value="openai">OpenAI</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="llm-endpoint">Endpoint</label>
+            <input id="llm-endpoint" type="text" placeholder="http://localhost:11434" />
+          </div>
+          <div class="settings-field">
+            <label for="llm-model-input">Model</label>
+            <div class="model-input-row">
+              <select id="llm-model-select" class="hidden"></select>
+              <input id="llm-model-input" type="text" placeholder="llama3.2:1b" />
+              <button id="llm-fetch-models-btn" class="btn-secondary" type="button">Fetch Models</button>
+            </div>
+          </div>
+          <div class="settings-field">
+            <label for="llm-api-key">API Key (optional — needed for OpenAI)</label>
+            <input id="llm-api-key" type="password" placeholder="sk-..." />
+          </div>
+        </div>
+        <div class="settings-field">
+          <label for="llm-system-prompt">System Prompt</label>
+          <textarea id="llm-system-prompt" rows="4"></textarea>
+        </div>
+        <div class="settings-field">
+          <label for="llm-rules">Rules</label>
+          <textarea id="llm-rules" rows="4"></textarea>
+        </div>
+        <button id="save-llm-config-btn" class="btn-primary" type="button">Save LLM Config</button>
+        <p id="llm-config-status" class="status-msg"></p>
+
+        <hr class="settings-divider" />
+
+        <h3 class="settings-section-title">Embeddings (Voyage AI via Atlas)</h3>
+        <p class="settings-hint">Configure the MongoDB Atlas Embedding and Reranking API for vector search. Create a Model API key in the Atlas UI (AI Model APIs).</p>
+        <div class="ai-settings-grid">
+          <div class="settings-field">
+            <label for="embeddings-api-key">Atlas Model API Key</label>
+            <input id="embeddings-api-key" type="password" placeholder="pa-..." />
+          </div>
+          <div class="settings-field">
+            <label for="embeddings-model">Embedding Model</label>
+            <select id="embeddings-model">
+              <option value="voyage-4-lite">voyage-4-lite (1024 dims)</option>
+              <option value="voyage-4">voyage-4 (1024 dims)</option>
+              <option value="voyage-4-large">voyage-4-large (1024 dims)</option>
+              <option value="voyage-4-nano">voyage-4-nano (512 dims)</option>
+              <option value="voyage-3">voyage-3 (1024 dims)</option>
+              <option value="voyage-3-lite">voyage-3-lite (512 dims)</option>
+              <option value="voyage-3.5">voyage-3.5 (1024 dims)</option>
+              <option value="voyage-3.5-lite">voyage-3.5-lite (512 dims)</option>
+              <option value="voyage-code-4">voyage-code-4 (1024 dims)</option>
+              <option value="voyage-code-3">voyage-code-3 (1024 dims)</option>
+              <option value="voyage-finance-2">voyage-finance-2 (1024 dims)</option>
+              <option value="voyage-law-2">voyage-law-2 (1024 dims)</option>
+            </select>
+          </div>
+        </div>
+        <div class="embeddings-actions">
+          <button id="save-embeddings-config-btn" class="btn-primary" type="button">Save Embeddings Config</button>
+          <button id="test-embeddings-btn" class="btn-secondary" type="button">Test Connection</button>
+        </div>
+        <p id="embeddings-config-status" class="status-msg"></p>
+      </div>
+
       <div class="card">
         <h2>Tier Pricing</h2>
         <table id="tiers-table">

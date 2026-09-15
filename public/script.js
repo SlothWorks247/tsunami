@@ -3,7 +3,10 @@
     customers: [],
     currentCustomerSlug: null,
     currentAppSlug: null,
+    chatHistory: [],
   };
+
+  let logSource = null;
 
   // ---------- Connection screen ----------
   const viewConnect = document.getElementById("view-connect");
@@ -17,8 +20,8 @@
   const connectStatus = document.getElementById("connect-status");
 
   async function checkConnectionStatus() {
-    const status = await fetch("/api/connection/status").then((r) => r.json());
-    if (status.connected) {
+    const status = await fetch("/api/auth/session").then((r) => r.json());
+    if (status.authenticated) {
       showConnectedUI(status.host);
     } else {
       showConnectScreen();
@@ -30,6 +33,10 @@
     document.getElementById("view-notes").classList.remove("active");
     document.getElementById("view-settings").classList.remove("active");
     connectionIndicator.classList.add("hidden");
+    if (logSource) {
+      logSource.close();
+      logSource = null;
+    }
   }
 
   function showConnectedUI(host) {
@@ -37,6 +44,7 @@
     document.getElementById("view-notes").classList.add("active");
     connectionIndicator.classList.remove("hidden");
     connectionIndicatorText.textContent = `Connected to ${host}`;
+    startLogStream();
     loadCustomers();
   }
 
@@ -50,7 +58,7 @@
     connectStatus.className = "status-msg";
     connectStatus.textContent = "";
     try {
-      const res = await fetch("/api/connection", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ host, username, password }),
@@ -68,9 +76,40 @@
   });
 
   disconnectBtn.addEventListener("click", async () => {
-    await fetch("/api/connection/disconnect", { method: "POST" });
+    await fetch("/api/auth/logout", { method: "POST" });
+    state.currentCustomerSlug = null;
+    state.currentAppSlug = null;
+    state.chatHistory = [];
     showConnectScreen();
   });
+
+  // ---------- SSE Log Stream ----------
+  function startLogStream() {
+    if (logSource) logSource.close();
+    logSource = new EventSource("/api/log/stream");
+    logSource.onmessage = (event) => {
+      try {
+        const entry = JSON.parse(event.data);
+        appendLogEntry(entry.message, entry.type);
+      } catch {
+      }
+    };
+    logSource.onerror = () => {
+    };
+  }
+
+  const logCard = document.getElementById("log-card");
+  const logOutput = document.getElementById("log-output");
+
+  function appendLogEntry(message, type) {
+    logCard.classList.remove("hidden");
+    const div = document.createElement("div");
+    div.className = `log-entry log-${type || "info"}`;
+    const time = new Date().toLocaleTimeString();
+    div.textContent = `[${time}] ${message}`;
+    logOutput.appendChild(div);
+    logOutput.scrollTop = logOutput.scrollHeight;
+  }
 
   // ---------- Tab navigation ----------
   const tabSettings = document.getElementById("tab-settings");
@@ -81,6 +120,8 @@
     switchTab("settings");
     loadPricingConfig();
     loadCustomerDiscounts();
+    loadLLMConfig();
+    loadEmbeddingsConfig();
   });
 
   function switchTab(tab) {
@@ -93,6 +134,10 @@
   // ---------- Helpers ----------
   async function api(path, options) {
     const res = await fetch(path, options);
+    if (res.status === 401) {
+      showConnectScreen();
+      throw new Error("Session expired. Please log in again.");
+    }
     const contentType = res.headers.get("content-type") || "";
     const body = contentType.includes("application/json")
       ? await res.json()
@@ -145,6 +190,7 @@
     const slug = customerSelect.value;
     state.currentCustomerSlug = slug || null;
     state.currentAppSlug = null;
+    state.chatHistory = [];
     appSelect.innerHTML = '<option value="">-- Select app --</option>';
     appWorkspace.classList.add("hidden");
     newAppBtn.disabled = !slug;
@@ -172,6 +218,8 @@
   appSelect.addEventListener("change", async () => {
     const slug = appSelect.value;
     state.currentAppSlug = slug || null;
+    state.chatHistory = [];
+    clearChat();
     if (slug) {
       appWorkspace.classList.remove("hidden");
       await loadNotes();
@@ -552,6 +600,151 @@
     return `${val.toFixed(1)} ${units[i]}`;
   }
 
+  // ---------- Chat (RAG) ----------
+  const chatMessages = document.getElementById("chat-messages");
+  const chatInput = document.getElementById("chat-input");
+  const chatSendBtn = document.getElementById("chat-send-btn");
+  const chatRetrievalMode = document.getElementById("chat-retrieval-mode");
+  const chatMeta = document.getElementById("chat-meta");
+
+  function clearChat() {
+    chatMessages.innerHTML = "";
+    chatMeta.textContent = "";
+    state.chatHistory = [];
+  }
+
+  function appendChatMessage(role, content) {
+    const div = document.createElement("div");
+    div.className = `chat-message chat-${role}`;
+    div.textContent = content;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  async function sendChat() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+    if (!state.currentCustomerSlug || !state.currentAppSlug) return;
+
+    appendChatMessage("user", message);
+    state.chatHistory.push({ role: "user", content: message });
+    chatInput.value = "";
+    chatSendBtn.disabled = true;
+    chatSendBtn.textContent = "Thinking...";
+    chatMeta.textContent = "";
+
+    const typingDiv = document.createElement("div");
+    typingDiv.className = "chat-message chat-assistant chat-typing";
+    typingDiv.textContent = "...";
+    chatMessages.appendChild(typingDiv);
+
+    try {
+      const result = await api(
+        `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/chat`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            history: state.chatHistory.slice(-10, -1),
+            retrievalMode: chatRetrievalMode.value,
+          }),
+        }
+      );
+
+      typingDiv.remove();
+      appendChatMessage("assistant", result.reply);
+      state.chatHistory.push({ role: "assistant", content: result.reply });
+
+      const methodLabel =
+        result.retrievalMethod === "vector" ? "Vector Search" : "All Notes";
+      chatMeta.textContent = `Retrieval: ${methodLabel} | Notes used: ${result.notesUsed}/${result.notesTotal}`;
+    } catch (err) {
+      typingDiv.remove();
+      appendChatMessage("assistant", `Error: ${err.message}`);
+    } finally {
+      chatSendBtn.disabled = false;
+      chatSendBtn.textContent = "Send";
+    }
+  }
+
+  chatSendBtn.addEventListener("click", sendChat);
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
+
+  // ---------- Embeddings button ----------
+  const embeddingsBtn = document.getElementById("embeddings-btn");
+
+  embeddingsBtn.addEventListener("click", async () => {
+    if (!state.currentCustomerSlug || !state.currentAppSlug) return;
+    if (
+      !confirm(
+        "Generate embeddings for all notes in this app? This will chunk and embed any notes that don't already have embeddings."
+      )
+    )
+      return;
+    embeddingsBtn.disabled = true;
+    embeddingsBtn.textContent = "Generating...";
+    try {
+      const result = await api(
+        `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/notes/backfill-embeddings`,
+        { method: "POST" }
+      );
+      const msg = `Embeddings complete: ${result.embedded} embedded, ${result.skipped} skipped, ${result.failed} failed (of ${result.total} notes)`;
+      appendLogEntry(msg, result.failed > 0 ? "error" : "success");
+      if (result.firstError) {
+        alert(`Completed with errors. First error: ${result.firstError}`);
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      embeddingsBtn.disabled = false;
+      embeddingsBtn.textContent = "Generate Embeddings";
+    }
+  });
+
+  // ---------- Executive Summary ----------
+  const updateSummaryBtn = document.getElementById("update-summary-btn");
+  const executiveSummaryOutput = document.getElementById(
+    "executive-summary-output"
+  );
+  const summaryMeta = document.getElementById("summary-meta");
+
+  updateSummaryBtn.addEventListener("click", async () => {
+    if (!state.currentCustomerSlug || !state.currentAppSlug) return;
+    updateSummaryBtn.disabled = true;
+    updateSummaryBtn.textContent = "Generating...";
+    executiveSummaryOutput.textContent = "";
+    summaryMeta.textContent = "";
+    try {
+      const result = await api(
+        `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/summary`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      executiveSummaryOutput.textContent = result.summary;
+      const methodLabel =
+        result.retrievalMethod === "vector"
+          ? "Vector Search"
+          : result.retrievalMethod === "none"
+            ? "No notes"
+            : "All Notes";
+      summaryMeta.textContent = `Retrieval: ${methodLabel} | Notes used: ${result.notesUsed}/${result.notesTotal}`;
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      updateSummaryBtn.disabled = false;
+      updateSummaryBtn.textContent = "Update Summary";
+    }
+  });
+
   // ---------- Analysis ----------
   const sizingBtn = document.getElementById("sizing-btn");
   const schemaBtn = document.getElementById("schema-btn");
@@ -562,7 +755,9 @@
   const sizingForm = document.getElementById("sizing-form");
   const sizingDataSizeInput = document.getElementById("sizing-data-size");
   const sizingGrowthInput = document.getElementById("sizing-growth-multiplier");
-  const sizingIndexOverheadInput = document.getElementById("sizing-index-overhead");
+  const sizingIndexOverheadInput = document.getElementById(
+    "sizing-index-overhead"
+  );
   const sizingCalculateBtn = document.getElementById("sizing-calculate-btn");
 
   function hideAnalysisOutput() {
@@ -591,9 +786,10 @@
           }),
         }
       );
-      analysisOutputTitle.textContent = result.data && result.data.needsMoreInfo
-        ? "More Information Needed"
-        : "Sizing Recommendation";
+      analysisOutputTitle.textContent =
+        result.data && result.data.needsMoreInfo
+          ? "More Information Needed"
+          : "Sizing Recommendation";
       analysisOutput.textContent = result.text;
       analysisOutputWrap.classList.remove("hidden");
     } catch (err) {
@@ -610,9 +806,10 @@
       const result = await api(
         `/api/customers/${state.currentCustomerSlug}/apps/${state.currentAppSlug}/analysis/schema`
       );
-      analysisOutputTitle.textContent = result.data && result.data.needsMoreInfo
-        ? "More Information Needed"
-        : "Schema Design Findings";
+      analysisOutputTitle.textContent =
+        result.data && result.data.needsMoreInfo
+          ? "More Information Needed"
+          : "Schema Design Findings";
       analysisOutput.textContent = result.text;
       analysisOutputWrap.classList.remove("hidden");
     } catch (err) {
@@ -628,6 +825,216 @@
       copyOutputBtn.textContent = "Copied!";
       setTimeout(() => (copyOutputBtn.textContent = original), 1500);
     });
+  });
+
+  // ---------- Settings: AI Config ----------
+  const DEFAULT_MODEL = "llama3.2:1b";
+
+  const llmProvider = document.getElementById("llm-provider");
+  const llmEndpoint = document.getElementById("llm-endpoint");
+  const llmModelSelect = document.getElementById("llm-model-select");
+  const llmModelInput = document.getElementById("llm-model-input");
+  const llmApiKey = document.getElementById("llm-api-key");
+  const llmSystemPrompt = document.getElementById("llm-system-prompt");
+  const llmRules = document.getElementById("llm-rules");
+  const saveLlmConfigBtn = document.getElementById("save-llm-config-btn");
+  const llmConfigStatus = document.getElementById("llm-config-status");
+  const llmFetchModelsBtn = document.getElementById("llm-fetch-models-btn");
+
+  function getModelValue() {
+    if (!llmModelSelect.classList.contains("hidden")) {
+      return llmModelSelect.value;
+    }
+    return llmModelInput.value;
+  }
+
+  function setModelValue(value) {
+    if (!llmModelSelect.classList.contains("hidden")) {
+      for (const opt of llmModelSelect.options) {
+        if (opt.value === value) {
+          llmModelSelect.value = value;
+          return;
+        }
+      }
+    }
+    llmModelInput.value = value;
+  }
+
+  async function loadOllamaModels() {
+    const endpoint = llmEndpoint.value.trim() || "http://localhost:11434";
+    llmModelSelect.innerHTML = '<option value="">Loading models...</option>';
+    try {
+      const result = await api(
+        `/api/llm/models?endpoint=${encodeURIComponent(endpoint)}`
+      );
+      const models = result.models || [];
+      if (models.length === 0) {
+        llmModelSelect.classList.add("hidden");
+        llmModelInput.classList.remove("hidden");
+        if (!llmModelInput.value) llmModelInput.value = DEFAULT_MODEL;
+        return;
+      }
+      llmModelSelect.classList.remove("hidden");
+      llmModelInput.classList.add("hidden");
+      llmModelSelect.innerHTML = "";
+      for (const m of models) {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        llmModelSelect.appendChild(opt);
+      }
+      const current = llmModelInput.value || llmModelSelect.value;
+      let selected = models.includes(DEFAULT_MODEL)
+        ? DEFAULT_MODEL
+        : models[0];
+      if (current && models.includes(current)) selected = current;
+      llmModelSelect.value = selected;
+    } catch (err) {
+      llmModelSelect.classList.add("hidden");
+      llmModelInput.classList.remove("hidden");
+      if (!llmModelInput.value) llmModelInput.value = DEFAULT_MODEL;
+    }
+  }
+
+  function selectProvider(provider) {
+    if (provider === "ollama") {
+      if (!llmEndpoint.value || llmEndpoint.value === "https://api.openai.com")
+        llmEndpoint.value = "http://localhost:11434";
+      llmModelSelect.classList.remove("hidden");
+      llmModelInput.classList.add("hidden");
+      loadOllamaModels();
+    } else if (provider === "openai") {
+      llmModelSelect.classList.add("hidden");
+      llmModelInput.classList.remove("hidden");
+      if (llmEndpoint.value === "http://localhost:11434")
+        llmEndpoint.value = "";
+      if (!llmEndpoint.value) llmEndpoint.value = "https://api.openai.com";
+      if (!llmModelInput.value) llmModelInput.value = "gpt-4o-mini";
+    } else {
+      llmModelSelect.classList.add("hidden");
+      llmModelInput.classList.remove("hidden");
+      if (llmEndpoint.value === "http://localhost:11434")
+        llmEndpoint.value = "";
+      if (!llmModelInput.value) llmModelInput.value = "";
+    }
+  }
+
+  llmProvider.addEventListener("change", () => {
+    selectProvider(llmProvider.value);
+  });
+
+  async function loadLLMConfig() {
+    try {
+      const config = await api("/api/llm/config");
+      if (config.configured) {
+        llmProvider.value = config.provider || "custom";
+        llmEndpoint.value = config.endpoint || "";
+        llmModelInput.value = config.model || "";
+        selectProvider(config.provider || "custom");
+      } else {
+        selectProvider("ollama");
+      }
+      llmSystemPrompt.value = config.systemPrompt || "";
+      llmRules.value = config.rules || "";
+    } catch {
+    }
+  }
+
+  llmFetchModelsBtn.addEventListener("click", () => {
+    loadOllamaModels();
+  });
+
+  saveLlmConfigBtn.addEventListener("click", async () => {
+    const endpoint = llmEndpoint.value.trim();
+    const model = getModelValue().trim();
+    if (!endpoint || !model) {
+      setStatus(llmConfigStatus, "Endpoint and model are required.", true);
+      return;
+    }
+    try {
+      await api("/api/llm/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: llmProvider.value,
+          endpoint,
+          model,
+          apiKey: llmApiKey.value || undefined,
+          systemPrompt: llmSystemPrompt.value,
+          rules: llmRules.value,
+        }),
+      });
+      setStatus(llmConfigStatus, "LLM config saved.");
+    } catch (err) {
+      setStatus(llmConfigStatus, err.message, true);
+    }
+  });
+
+  // ---------- Settings: Embeddings Config ----------
+  const embeddingsApiKey = document.getElementById("embeddings-api-key");
+  const embeddingsModel = document.getElementById("embeddings-model");
+  const saveEmbeddingsConfigBtn = document.getElementById(
+    "save-embeddings-config-btn"
+  );
+  const testEmbeddingsBtn = document.getElementById("test-embeddings-btn");
+  const embeddingsConfigStatus = document.getElementById(
+    "embeddings-config-status"
+  );
+
+  async function loadEmbeddingsConfig() {
+    try {
+      const config = await api("/api/llm/embeddings/config");
+      if (config.model) {
+        embeddingsModel.value = config.model;
+      }
+    } catch {
+    }
+  }
+
+  saveEmbeddingsConfigBtn.addEventListener("click", async () => {
+    try {
+      await api("/api/llm/embeddings/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: embeddingsApiKey.value || undefined,
+          model: embeddingsModel.value,
+        }),
+      });
+      setStatus(embeddingsConfigStatus, "Embeddings config saved.");
+      embeddingsApiKey.value = "";
+    } catch (err) {
+      setStatus(embeddingsConfigStatus, err.message, true);
+    }
+  });
+
+  testEmbeddingsBtn.addEventListener("click", async () => {
+    testEmbeddingsBtn.disabled = true;
+    testEmbeddingsBtn.textContent = "Testing...";
+    setStatus(embeddingsConfigStatus, "");
+    try {
+      const result = await api("/api/llm/embeddings/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: embeddingsApiKey.value || undefined,
+          model: embeddingsModel.value,
+        }),
+      });
+      if (result.ok) {
+        setStatus(
+          embeddingsConfigStatus,
+          `Connection successful! ${result.dimensions} dimensions, model: ${result.model}`
+        );
+      } else {
+        setStatus(embeddingsConfigStatus, result.error || "Test failed.", true);
+      }
+    } catch (err) {
+      setStatus(embeddingsConfigStatus, err.message, true);
+    } finally {
+      testEmbeddingsBtn.disabled = false;
+      testEmbeddingsBtn.textContent = "Test Connection";
+    }
   });
 
   // ---------- Settings: Tier Pricing ----------

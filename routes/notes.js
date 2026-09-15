@@ -3,23 +3,35 @@ const multer = require("multer");
 const { ObjectId } = require("mongodb");
 const {
   getAppNotesCollection,
+  getAppNoteChunksCollection,
   getAppBucket,
   getCustomersCollection,
   ensureAppIndexes,
+  ensureAppVectorIndex,
 } = require("../db");
 const { generateSizingReport } = require("../services/sizingAnalyzer");
 const { generateSchemaReport } = require("../services/schemaLinter");
+const { extractText } = require("../services/fileParser");
+const { chunkText } = require("../services/chunker");
+const {
+  generateEmbeddings,
+  getEmbeddingDimensions,
+} = require("../services/embeddings");
+const { logStep } = require("../services/logger");
 
 const router = express.Router({ mergeParams: true });
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
 
 /**
  * Confirms the customer + app combination exists in the registry before
  * we touch/create anything in their database. Returns the app object if
  * found, or null.
  */
-async function findApp(customerSlug, appSlug) {
-  const customer = await getCustomersCollection().findOne({
+async function findApp(sessionId, customerSlug, appSlug) {
+  const customer = await getCustomersCollection(sessionId).findOne({
     dbSlug: customerSlug,
   });
   if (!customer) return null;
@@ -27,16 +39,136 @@ async function findApp(customerSlug, appSlug) {
   return app || null;
 }
 
+function getNoteContent(note) {
+  if (!note) return "";
+  return note.type === "text" ? note.body : note.textContent;
+}
+
+async function generateAndStoreChunks(
+  sessionId,
+  customerSlug,
+  appSlug,
+  noteId,
+  title,
+  content,
+  voyageConfig
+) {
+  if (!content || !content.trim()) return 0;
+  if (!voyageConfig || !voyageConfig.apiKey) return 0;
+
+  const model = voyageConfig.model || "voyage-4-lite";
+  const chunks = chunkText(content, title);
+  if (chunks.length === 0) return 0;
+
+  logStep(
+    sessionId,
+    `Note "${title}": chunking text into ${chunks.length} passage${chunks.length > 1 ? "s" : ""} (~2000 chars each)`,
+    "info"
+  );
+
+  logStep(
+    sessionId,
+    `Note "${title}": generating embeddings for ${chunks.length} chunk${chunks.length > 1 ? "s" : ""} via ${model} (input_type: document)...`,
+    "info"
+  );
+  const { embeddings } = await generateEmbeddings(
+    chunks.map((c) => c.text),
+    voyageConfig.apiKey,
+    model,
+    "document"
+  );
+
+  if (!embeddings || embeddings.length === 0) {
+    logStep(
+      sessionId,
+      `Note "${title}": embedding API returned no vectors`,
+      "error"
+    );
+    return 0;
+  }
+
+  if (embeddings.length !== chunks.length) {
+    logStep(
+      sessionId,
+      `Note "${title}": embedding API returned ${embeddings.length} vectors for ${chunks.length} chunks — storing only matched pairs`,
+      "error"
+    );
+  }
+
+  const usableCount = Math.min(embeddings.length, chunks.length);
+  if (usableCount === 0) return 0;
+
+  logStep(
+    sessionId,
+    `Note "${title}": received ${embeddings.length} embeddings (${embeddings[0].length} dims each)`,
+    "success"
+  );
+
+  const docs = [];
+  for (let i = 0; i < usableCount; i++) {
+    docs.push({
+      noteId,
+      chunkIndex: chunks[i].chunkIndex,
+      text: chunks[i].text,
+      embedding: embeddings[i],
+      embeddingModel: model,
+      createdAt: new Date(),
+    });
+  }
+
+  await getAppNoteChunksCollection(sessionId, customerSlug, appSlug).insertMany(
+    docs
+  );
+  logStep(
+    sessionId,
+    `Note "${title}": ${docs.length} chunk${docs.length > 1 ? "s" : ""} stored in note_chunks collection`,
+    "success"
+  );
+
+  const dims = getEmbeddingDimensions(model);
+  logStep(
+    sessionId,
+    `Ensuring Atlas Vector Search index (${dims} dims, cosine)...`,
+    "info"
+  );
+  await ensureAppVectorIndex(sessionId, customerSlug, appSlug, dims);
+
+  return docs.length;
+}
+
+async function deleteChunksForNote(sessionId, customerSlug, appSlug, noteId) {
+  try {
+    await getAppNoteChunksCollection(
+      sessionId,
+      customerSlug,
+      appSlug
+    ).deleteMany({ noteId });
+  } catch {
+  }
+}
+
+function getVoyageConfig(req) {
+  if (!req.session || !req.session.voyageApiKey) return null;
+  return {
+    apiKey: req.session.voyageApiKey,
+    model: req.session.voyageModel || "voyage-4-lite",
+  };
+}
+
 // GET /api/customers/:customerSlug/apps/:appSlug/notes
 router.get("/notes", async (req, res) => {
   try {
     const { customerSlug, appSlug } = req.params;
-    const app = await findApp(customerSlug, appSlug);
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
     if (!app) {
       return res.status(404).json({ error: "Customer or app not found" });
     }
 
-    const notes = await getAppNotesCollection(customerSlug, appSlug)
+    const notes = await getAppNotesCollection(
+      req.sessionID,
+      customerSlug,
+      appSlug
+    )
       .find({})
       .sort({ createdAt: -1 })
       .toArray();
@@ -53,7 +185,7 @@ router.post("/notes", async (req, res) => {
     const { customerSlug, appSlug } = req.params;
     const { title, body } = req.body;
 
-    const app = await findApp(customerSlug, appSlug);
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
     if (!app) {
       return res.status(404).json({ error: "Customer or app not found" });
     }
@@ -64,10 +196,7 @@ router.post("/notes", async (req, res) => {
       return res.status(400).json({ error: "Note body is required" });
     }
 
-    // Self-heal indexes in case this app's collection was created before
-    // the externalId index was fixed to a partial index (older apps could
-    // otherwise hit a duplicate key error on the second note).
-    await ensureAppIndexes(customerSlug, appSlug);
+    await ensureAppIndexes(req.sessionID, customerSlug, appSlug);
 
     const now = new Date();
     const doc = {
@@ -81,10 +210,33 @@ router.post("/notes", async (req, res) => {
     };
 
     const result = await getAppNotesCollection(
+      req.sessionID,
       customerSlug,
       appSlug
     ).insertOne(doc);
     res.status(201).json({ ...doc, _id: result.insertedId });
+
+    const voyageConfig = getVoyageConfig(req);
+    if (voyageConfig) {
+      try {
+        await generateAndStoreChunks(
+          req.sessionID,
+          customerSlug,
+          appSlug,
+          result.insertedId,
+          doc.title,
+          body,
+          voyageConfig
+        );
+      } catch (err) {
+        console.warn(
+          "Embedding failed for note",
+          result.insertedId,
+          ":",
+          err.message
+        );
+      }
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create note" });
@@ -97,19 +249,35 @@ router.post("/notes/upload", upload.single("file"), async (req, res) => {
     const { customerSlug, appSlug } = req.params;
     const { title } = req.body;
 
-    const app = await findApp(customerSlug, appSlug);
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
     if (!app) {
       return res.status(404).json({ error: "Customer or app not found" });
     }
     if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
+      return res
+        .status(400)
+        .json({ error: "No file uploaded (field name must be 'file')" });
     }
 
-    // Self-heal indexes in case this app's collection was created before
-    // the externalId index was fixed to a partial index.
-    await ensureAppIndexes(customerSlug, appSlug);
+    await ensureAppIndexes(req.sessionID, customerSlug, appSlug);
 
-    const bucket = getAppBucket(customerSlug, appSlug);
+    logStep(
+      req.sessionID,
+      `Extracting text from file "${req.file.originalname}" (${req.file.mimetype})...`,
+      "info"
+    );
+    const textContent = await extractText(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname
+    );
+    logStep(
+      req.sessionID,
+      `Text extracted: ${textContent ? textContent.length : 0} characters`,
+      textContent ? "success" : "error"
+    );
+
+    const bucket = getAppBucket(req.sessionID, customerSlug, appSlug);
     const uploadStream = bucket.openUploadStream(req.file.originalname, {
       contentType: req.file.mimetype,
     });
@@ -122,24 +290,55 @@ router.post("/notes/upload", upload.single("file"), async (req, res) => {
     });
 
     uploadStream.on("finish", async () => {
-      const now = new Date();
-      const doc = {
-        title: (title && title.trim()) || req.file.originalname,
-        type: "file",
-        fileId: uploadStream.id,
-        filename: req.file.originalname,
-        contentType: req.file.mimetype,
-        size: req.file.size,
-        source: "manual",
-        externalId: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const result = await getAppNotesCollection(
-        customerSlug,
-        appSlug
-      ).insertOne(doc);
-      res.status(201).json({ ...doc, _id: result.insertedId });
+      try {
+        const now = new Date();
+        const doc = {
+          title: (title && title.trim()) || req.file.originalname,
+          type: "file",
+          textContent,
+          fileId: uploadStream.id,
+          filename: req.file.originalname,
+          contentType: req.file.mimetype,
+          size: req.file.size,
+          source: "manual",
+          externalId: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const result = await getAppNotesCollection(
+          req.sessionID,
+          customerSlug,
+          appSlug
+        ).insertOne(doc);
+        res.status(201).json({ ...doc, _id: result.insertedId });
+
+        const voyageConfig = getVoyageConfig(req);
+        if (voyageConfig) {
+          try {
+            await generateAndStoreChunks(
+              req.sessionID,
+              customerSlug,
+              appSlug,
+              result.insertedId,
+              doc.title,
+              textContent,
+              voyageConfig
+            );
+          } catch (err) {
+            console.warn(
+              "Embedding failed for file note",
+              result.insertedId,
+              ":",
+              err.message
+            );
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to store file note" });
+        }
+      }
     });
   } catch (err) {
     console.error(err);
@@ -155,7 +354,7 @@ router.put("/notes/:noteId", async (req, res) => {
     const { customerSlug, appSlug, noteId } = req.params;
     const { title, body } = req.body;
 
-    const app = await findApp(customerSlug, appSlug);
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
     if (!app) {
       return res.status(404).json({ error: "Customer or app not found" });
     }
@@ -167,7 +366,7 @@ router.put("/notes/:noteId", async (req, res) => {
       return res.status(400).json({ error: "Invalid note id" });
     }
 
-    const notes = getAppNotesCollection(customerSlug, appSlug);
+    const notes = getAppNotesCollection(req.sessionID, customerSlug, appSlug);
     const existing = await notes.findOne({ _id: objectId });
     if (!existing) {
       return res.status(404).json({ error: "Note not found" });
@@ -185,12 +384,40 @@ router.put("/notes/:noteId", async (req, res) => {
       }
       update.body = body;
     }
-    // File notes: only title is updated via this route. Body is ignored
-    // even if sent, since file notes don't have a body field.
 
     await notes.updateOne({ _id: objectId }, { $set: update });
     const updated = await notes.findOne({ _id: objectId });
     res.json(updated);
+
+    if (existing.type === "text") {
+      await deleteChunksForNote(
+        req.sessionID,
+        customerSlug,
+        appSlug,
+        objectId
+      );
+      const voyageConfig = getVoyageConfig(req);
+      if (voyageConfig) {
+        try {
+          await generateAndStoreChunks(
+            req.sessionID,
+            customerSlug,
+            appSlug,
+            objectId,
+            update.title,
+            update.body,
+            voyageConfig
+          );
+        } catch (err) {
+          console.warn(
+            "Embedding failed for note",
+            objectId,
+            ":",
+            err.message
+          );
+        }
+      }
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update note" });
@@ -208,7 +435,7 @@ router.put(
       const { customerSlug, appSlug, noteId } = req.params;
       const { title } = req.body;
 
-      const app = await findApp(customerSlug, appSlug);
+      const app = await findApp(req.sessionID, customerSlug, appSlug);
       if (!app) {
         return res.status(404).json({ error: "Customer or app not found" });
       }
@@ -220,7 +447,11 @@ router.put(
         return res.status(400).json({ error: "Invalid note id" });
       }
 
-      const notes = getAppNotesCollection(customerSlug, appSlug);
+      const notes = getAppNotesCollection(
+        req.sessionID,
+        customerSlug,
+        appSlug
+      );
       const existing = await notes.findOne({ _id: objectId });
       if (!existing) {
         return res.status(404).json({ error: "Note not found" });
@@ -236,7 +467,23 @@ router.put(
           .json({ error: "No file uploaded (field name must be 'file')" });
       }
 
-      const bucket = getAppBucket(customerSlug, appSlug);
+      logStep(
+        req.sessionID,
+        `Extracting text from replacement file "${req.file.originalname}" (${req.file.mimetype})...`,
+        "info"
+      );
+      const textContent = await extractText(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+      logStep(
+        req.sessionID,
+        `Text extracted: ${textContent ? textContent.length : 0} characters`,
+        textContent ? "success" : "error"
+      );
+
+      const bucket = getAppBucket(req.sessionID, customerSlug, appSlug);
       const uploadStream = bucket.openUploadStream(req.file.originalname, {
         contentType: req.file.mimetype,
       });
@@ -249,31 +496,66 @@ router.put(
       });
 
       uploadStream.on("finish", async () => {
-        const oldFileId = existing.fileId;
-
-        const update = {
-          title: (title && title.trim()) || req.file.originalname,
-          fileId: uploadStream.id,
-          filename: req.file.originalname,
-          contentType: req.file.mimetype,
-          size: req.file.size,
-          updatedAt: new Date(),
-        };
-
-        await notes.updateOne({ _id: objectId }, { $set: update });
-
-        // Clean up the old file now that the note points at the new one.
         try {
-          await bucket.delete(new ObjectId(oldFileId));
-        } catch (err) {
-          console.warn(
-            `Could not delete old GridFS file ${oldFileId}:`,
-            err.message
-          );
-        }
+          const oldFileId = existing.fileId;
 
-        const updated = await notes.findOne({ _id: objectId });
-        res.json(updated);
+          const update = {
+            title: (title && title.trim()) || req.file.originalname,
+            textContent,
+            fileId: uploadStream.id,
+            filename: req.file.originalname,
+            contentType: req.file.mimetype,
+            size: req.file.size,
+            updatedAt: new Date(),
+          };
+
+          await notes.updateOne({ _id: objectId }, { $set: update });
+
+          try {
+            await bucket.delete(new ObjectId(oldFileId));
+          } catch (err) {
+            console.warn(
+              `Could not delete old GridFS file ${oldFileId}:`,
+              err.message
+            );
+          }
+
+          const updated = await notes.findOne({ _id: objectId });
+          res.json(updated);
+
+          await deleteChunksForNote(
+            req.sessionID,
+            customerSlug,
+            appSlug,
+            objectId
+          );
+          const voyageConfig = getVoyageConfig(req);
+          if (voyageConfig) {
+            try {
+              await generateAndStoreChunks(
+                req.sessionID,
+                customerSlug,
+                appSlug,
+                objectId,
+                update.title,
+                textContent,
+                voyageConfig
+              );
+            } catch (err) {
+              console.warn(
+                "Embedding failed for file note",
+                objectId,
+                ":",
+                err.message
+              );
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to replace file note" });
+          }
+        }
       });
     } catch (err) {
       console.error(err);
@@ -287,7 +569,7 @@ router.delete("/notes/:noteId", async (req, res) => {
   try {
     const { customerSlug, appSlug, noteId } = req.params;
 
-    const app = await findApp(customerSlug, appSlug);
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
     if (!app) {
       return res.status(404).json({ error: "Customer or app not found" });
     }
@@ -299,14 +581,14 @@ router.delete("/notes/:noteId", async (req, res) => {
       return res.status(400).json({ error: "Invalid note id" });
     }
 
-    const notes = getAppNotesCollection(customerSlug, appSlug);
+    const notes = getAppNotesCollection(req.sessionID, customerSlug, appSlug);
     const existing = await notes.findOne({ _id: objectId });
     if (!existing) {
       return res.status(404).json({ error: "Note not found" });
     }
 
     if (existing.type === "file" && existing.fileId) {
-      const bucket = getAppBucket(customerSlug, appSlug);
+      const bucket = getAppBucket(req.sessionID, customerSlug, appSlug);
       try {
         await bucket.delete(new ObjectId(existing.fileId));
       } catch (err) {
@@ -317,6 +599,7 @@ router.delete("/notes/:noteId", async (req, res) => {
       }
     }
 
+    await deleteChunksForNote(req.sessionID, customerSlug, appSlug, objectId);
     await notes.deleteOne({ _id: objectId });
     res.json({ deleted: true });
   } catch (err) {
@@ -329,7 +612,7 @@ router.delete("/notes/:noteId", async (req, res) => {
 router.get("/files/:fileId", async (req, res) => {
   try {
     const { customerSlug, appSlug, fileId } = req.params;
-    const app = await findApp(customerSlug, appSlug);
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
     if (!app) {
       return res.status(404).json({ error: "Customer or app not found" });
     }
@@ -341,7 +624,7 @@ router.get("/files/:fileId", async (req, res) => {
       return res.status(400).json({ error: "Invalid file id" });
     }
 
-    const bucket = getAppBucket(customerSlug, appSlug);
+    const bucket = getAppBucket(req.sessionID, customerSlug, appSlug);
     const files = await bucket.find({ _id: objectId }).toArray();
     if (!files.length) {
       return res.status(404).json({ error: "File not found" });
@@ -365,21 +648,154 @@ router.get("/files/:fileId", async (req, res) => {
   }
 });
 
+// POST /api/customers/:customerSlug/apps/:appSlug/notes/backfill-embeddings
+router.post("/notes/backfill-embeddings", async (req, res) => {
+  try {
+    const { customerSlug, appSlug } = req.params;
+    const voyageConfig = getVoyageConfig(req);
+
+    if (!voyageConfig) {
+      return res.status(400).json({
+        error:
+          "Embedding API key is not configured. Open Settings to add one.",
+      });
+    }
+
+    const app = await findApp(req.sessionID, customerSlug, appSlug);
+    if (!app) {
+      return res.status(404).json({ error: "Customer or app not found" });
+    }
+
+    const notes = await getAppNotesCollection(
+      req.sessionID,
+      customerSlug,
+      appSlug
+    )
+      .find({
+        $or: [
+          { type: "text" },
+          { textContent: { $exists: true, $ne: "" } },
+        ],
+      })
+      .toArray();
+
+    logStep(
+      req.sessionID,
+      `Backfill starting for ${notes.length} note${notes.length !== 1 ? "s" : ""} (model: ${voyageConfig.model || "voyage-4-lite"})...`,
+      "info"
+    );
+
+    const chunksCol = getAppNoteChunksCollection(
+      req.sessionID,
+      customerSlug,
+      appSlug
+    );
+    let embedded = 0;
+    let skipped = 0;
+    let failed = 0;
+    const errors = [];
+
+    for (let idx = 0; idx < notes.length; idx++) {
+      const note = notes[idx];
+      const existingChunks = await chunksCol.countDocuments({
+        noteId: note._id,
+      });
+      if (existingChunks > 0) {
+        logStep(
+          req.sessionID,
+          `Note ${idx + 1}/${notes.length}: "${note.title}" — already has ${existingChunks} chunks, skipping`,
+          "info"
+        );
+        skipped++;
+        continue;
+      }
+
+      const content = getNoteContent(note);
+      if (!content || !content.trim()) {
+        logStep(
+          req.sessionID,
+          `Note ${idx + 1}/${notes.length}: "${note.title}" — no text content, skipping`,
+          "info"
+        );
+        skipped++;
+        continue;
+      }
+
+      logStep(
+        req.sessionID,
+        `Note ${idx + 1}/${notes.length}: "${note.title}" — chunking + embedding...`,
+        "info"
+      );
+      try {
+        const count = await generateAndStoreChunks(
+          req.sessionID,
+          customerSlug,
+          appSlug,
+          note._id,
+          note.title,
+          content,
+          voyageConfig
+        );
+        embedded++;
+        logStep(
+          req.sessionID,
+          `Note ${idx + 1}/${notes.length}: "${note.title}" — ${count} chunks embedded`,
+          "success"
+        );
+      } catch (err) {
+        failed++;
+        errors.push({ noteId: note._id, title: note.title, error: err.message });
+        logStep(
+          req.sessionID,
+          `Note ${idx + 1}/${notes.length}: "${note.title}" — failed: ${err.message}`,
+          "error"
+        );
+        console.warn(`Backfill failed for note "${note.title}":`, err.message);
+      }
+    }
+
+    logStep(
+      req.sessionID,
+      `Backfill complete: ${embedded} embedded, ${skipped} skipped, ${failed} failed (of ${notes.length} notes)`,
+      embedded > 0 ? "success" : "info"
+    );
+
+    res.json({
+      total: notes.length,
+      embedded,
+      skipped,
+      failed,
+      errors,
+      firstError: errors.length > 0 ? errors[0].error : null,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to backfill embeddings." });
+  }
+});
+
 // POST /api/customers/:customerSlug/apps/:appSlug/analysis/sizing
 // body: { dataSizeGB, growthMultiplier, indexOverheadPercent }
 router.post("/analysis/sizing", async (req, res) => {
   try {
     const { customerSlug, appSlug } = req.params;
     const { dataSizeGB, growthMultiplier, indexOverheadPercent } = req.body;
-    const report = await generateSizingReport(customerSlug, appSlug, {
-      dataSizeGB,
-      growthMultiplier,
-      indexOverheadPercent,
-    });
+    const report = await generateSizingReport(
+      req.sessionID,
+      customerSlug,
+      appSlug,
+      {
+        dataSizeGB,
+        growthMultiplier,
+        indexOverheadPercent,
+      }
+    );
     res.json(report);
   } catch (err) {
     console.error(err);
-    res.status(400).json({ error: err.message || "Failed to generate sizing report" });
+    res
+      .status(400)
+      .json({ error: err.message || "Failed to generate sizing report" });
   }
 });
 
@@ -387,11 +803,17 @@ router.post("/analysis/sizing", async (req, res) => {
 router.get("/analysis/schema", async (req, res) => {
   try {
     const { customerSlug, appSlug } = req.params;
-    const report = await generateSchemaReport(customerSlug, appSlug);
+    const report = await generateSchemaReport(
+      req.sessionID,
+      customerSlug,
+      appSlug
+    );
     res.json(report);
   } catch (err) {
     console.error(err);
-    res.status(400).json({ error: err.message || "Failed to generate schema report" });
+    res
+      .status(400)
+      .json({ error: err.message || "Failed to generate schema report" });
   }
 });
 

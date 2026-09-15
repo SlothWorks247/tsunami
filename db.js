@@ -1,7 +1,6 @@
 const { MongoClient, GridFSBucket } = require("mongodb");
 
-let mongoClient = null;
-let connectedHost = null;
+const clients = new Map();
 
 /**
  * Turn an arbitrary display name (customer or app name) into a safe,
@@ -60,21 +59,7 @@ function buildConnectionUri({ host, username, password }) {
   return `mongodb+srv://${user}:${pass}@${cleanHost}/?retryWrites=true&w=majority&appName=NotesToSizingPOV`;
 }
 
-function isConnected() {
-  return mongoClient !== null;
-}
-
-function getConnectedHost() {
-  return connectedHost;
-}
-
-/**
- * Attempts to connect to Atlas with the given credentials. On success,
- * seeds the pricing config and stores the client (in memory only - not
- * persisted anywhere) for the rest of the app to use. Throws with a clear
- * message on failure.
- */
-async function connectWithCredentials({ host, username, password }) {
+async function connect(sessionId, host, username, password) {
   if (!host || !host.trim()) throw new Error("Cluster host is required");
   if (!username || !username.trim()) throw new Error("Username is required");
   if (!password) throw new Error("Password is required");
@@ -86,45 +71,50 @@ async function connectWithCredentials({ host, username, password }) {
 
   try {
     await candidateClient.connect();
-    // Confirm auth actually works, not just TCP/TLS connectivity.
     await candidateClient.db("admin").command({ ping: 1 });
   } catch (err) {
     await candidateClient.close().catch(() => {});
-    throw new Error(
-      `Failed to connect: ${err.message || "unknown error"}`
-    );
+    throw new Error(`Failed to connect: ${err.message || "unknown error"}`);
   }
 
-  // Tear down any previous connection before adopting the new one.
-  if (mongoClient) {
-    await mongoClient.close().catch(() => {});
+  const prevClient = clients.get(sessionId);
+  if (prevClient) {
+    await prevClient.close().catch(() => {});
   }
 
-  mongoClient = candidateClient;
-  connectedHost = host.trim().replace(/^mongodb(\+srv)?:\/\//, "").replace(/\/.*$/, "");
+  clients.set(sessionId, candidateClient);
+  await seedPricingConfig(sessionId);
 
-  await seedPricingConfig();
-
-  return { host: connectedHost };
+  return { host: host.trim().replace(/^mongodb(\+srv)?:\/\//, "").replace(/\/.*$/, "") };
 }
 
-async function disconnect() {
-  if (mongoClient) {
-    await mongoClient.close().catch(() => {});
-  }
-  mongoClient = null;
-  connectedHost = null;
+function getClient(sessionId) {
+  return clients.get(sessionId) || null;
 }
 
-function getClient() {
-  if (!mongoClient) {
-    throw new Error("Not connected to a database yet");
+async function removeClient(sessionId) {
+  const client = clients.get(sessionId);
+  if (client) {
+    try {
+      await client.close();
+    } catch (err) {
+    }
+    clients.delete(sessionId);
   }
-  return mongoClient;
 }
 
-async function seedPricingConfig() {
-  const platformDb = getClient().db("platform");
+function isConnected(sessionId) {
+  return clients.has(sessionId);
+}
+
+function getConnectedHost(sessionId) {
+  const client = clients.get(sessionId);
+  if (!client) return null;
+  return client.s.options.hosts[0].host;
+}
+
+async function seedPricingConfig(sessionId) {
+  const platformDb = getClient(sessionId).db("platform");
   const existing = await platformDb
     .collection("pricingConfig")
     .findOne({ _id: "default" });
@@ -139,28 +129,40 @@ async function seedPricingConfig() {
   }
 }
 
-function getPlatformDb() {
-  return getClient().db("platform");
+function getPlatformDb(sessionId) {
+  const client = getClient(sessionId);
+  if (!client) {
+    throw new Error("Not connected to a database. Please log in again.");
+  }
+  return client.db("platform");
 }
 
-function getCustomersCollection() {
-  return getPlatformDb().collection("customers");
+function getCustomersCollection(sessionId) {
+  return getPlatformDb(sessionId).collection("customers");
 }
 
-function getPricingConfigCollection() {
-  return getPlatformDb().collection("pricingConfig");
+function getPricingConfigCollection(sessionId) {
+  return getPlatformDb(sessionId).collection("pricingConfig");
 }
 
-function getCustomerDb(dbSlug) {
-  return getClient().db(dbSlug);
+function getCustomerDb(sessionId, dbSlug) {
+  const client = getClient(sessionId);
+  if (!client) {
+    throw new Error("Not connected to a database. Please log in again.");
+  }
+  return client.db(dbSlug);
 }
 
-function getAppNotesCollection(dbSlug, appSlug) {
-  return getCustomerDb(dbSlug).collection(`${appSlug}.notes`);
+function getAppNotesCollection(sessionId, dbSlug, appSlug) {
+  return getCustomerDb(sessionId, dbSlug).collection(`${appSlug}.notes`);
 }
 
-function getAppBucket(dbSlug, appSlug) {
-  return new GridFSBucket(getCustomerDb(dbSlug), {
+function getAppNoteChunksCollection(sessionId, dbSlug, appSlug) {
+  return getCustomerDb(sessionId, dbSlug).collection(`${appSlug}.note_chunks`);
+}
+
+function getAppBucket(sessionId, dbSlug, appSlug) {
+  return new GridFSBucket(getCustomerDb(sessionId, dbSlug), {
     bucketName: `${appSlug}-uploads`,
   });
 }
@@ -169,23 +171,14 @@ function getAppBucket(dbSlug, appSlug) {
  * Create the recommended indexes for an app's notes collection. Idempotent
  * and self-healing - safe to call every time a note is created, not just
  * when the app is first created.
- *
- * Note: externalId uses a *partial* index (only indexing documents where
- * externalId is an actual string), not a sparse index. A plain sparse index
- * would still index documents where externalId is explicitly set to null
- * (every manual note has externalId: null by design), causing a duplicate
- * key error as soon as a second note was created. If an older, broken
- * sparse index exists from a previous version of this app, it's dropped
- * and replaced automatically.
  */
-async function ensureAppIndexes(dbSlug, appSlug) {
-  const notes = getAppNotesCollection(dbSlug, appSlug);
+async function ensureAppIndexes(sessionId, dbSlug, appSlug) {
+  const notes = getAppNotesCollection(sessionId, dbSlug, appSlug);
   await notes.createIndex({ createdAt: -1 });
 
   try {
     await notes.dropIndex("externalId_1");
   } catch {
-    // Index didn't exist - nothing to clean up.
   }
 
   await notes.createIndex(
@@ -195,21 +188,70 @@ async function ensureAppIndexes(dbSlug, appSlug) {
       partialFilterExpression: { externalId: { $type: "string" } },
     }
   );
+
+  const chunks = getAppNoteChunksCollection(sessionId, dbSlug, appSlug);
+  await chunks.createIndex({ noteId: 1 });
+}
+
+/**
+ * Ensure a MongoDB Atlas Vector Search index exists on the app's
+ * note_chunks collection. Creates the index if missing, or recreates it
+ * if the embedding dimensions have changed.
+ */
+async function ensureAppVectorIndex(sessionId, dbSlug, appSlug, dimensions) {
+  const chunks = getAppNoteChunksCollection(sessionId, dbSlug, appSlug);
+  const dims = dimensions || 1024;
+
+  let existing = [];
+  try {
+    existing = await chunks.listSearchIndexes("vector_index").toArray();
+  } catch {
+  }
+
+  if (existing.length > 0) {
+    const currentDims = existing[0].latestDefinition?.fields?.find(
+      (f) => f.type === "vector"
+    )?.numDimensions;
+    if (currentDims === dims) return;
+
+    try {
+      await chunks.dropSearchIndex("vector_index");
+    } catch {
+    }
+  }
+
+  await chunks.createSearchIndex({
+    name: "vector_index",
+    type: "vectorSearch",
+    definition: {
+      fields: [
+        {
+          type: "vector",
+          path: "embedding",
+          numDimensions: dims,
+          similarity: "cosine",
+        },
+      ],
+    },
+  });
 }
 
 module.exports = {
   slugify,
   buildConnectionUri,
+  connect,
+  getClient,
+  removeClient,
   isConnected,
   getConnectedHost,
-  connectWithCredentials,
-  disconnect,
   getPlatformDb,
   getCustomersCollection,
   getPricingConfigCollection,
   getCustomerDb,
   getAppNotesCollection,
+  getAppNoteChunksCollection,
   getAppBucket,
   ensureAppIndexes,
+  ensureAppVectorIndex,
   DEFAULT_PRICING_TIERS,
 };

@@ -1,5 +1,16 @@
 const { getCustomersCollection, getPricingConfigCollection } = require("../db");
 
+/**
+ * Wraps the session-scoped DB accessors so the analyzer can be called
+ * with a sessionId and the rest of the function body stays unchanged.
+ */
+function db(sessionId) {
+  return {
+    getCustomersCollection: () => getCustomersCollection(sessionId),
+    getPricingConfigCollection: () => getPricingConfigCollection(sessionId),
+  };
+}
+
 const DEFAULT_GROWTH_MULTIPLIER = 3;
 const DEFAULT_INDEX_OVERHEAD_PERCENT = 15;
 
@@ -42,11 +53,13 @@ function buildInsufficientInfoReport(customer, app) {
  * discovery questions to ask the customer instead of a calculation.
  */
 async function generateSizingReport(
+  sessionId,
   customerSlug,
   appSlug,
   { dataSizeGB, growthMultiplier, indexOverheadPercent } = {}
 ) {
-  const customer = await getCustomersCollection().findOne({
+  const { getCustomersCollection: getCustomers, getPricingConfigCollection: getPricing } = db(sessionId);
+  const customer = await getCustomers().findOne({
     dbSlug: customerSlug,
   });
   if (!customer) {
@@ -74,7 +87,7 @@ async function generateSizingReport(
       ? Number(indexOverheadPercent)
       : DEFAULT_INDEX_OVERHEAD_PERCENT;
 
-  const pricingConfig = await getPricingConfigCollection().findOne({
+  const pricingConfig = await getPricing().findOne({
     _id: "default",
   });
   if (!pricingConfig) {

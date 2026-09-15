@@ -4,6 +4,18 @@ const {
   getAppNotesCollection,
 } = require("../db");
 
+/**
+ * Wraps the session-scoped DB accessors so the linter can be called
+ * with a sessionId.
+ */
+function db(sessionId) {
+  return {
+    getCustomerDb: (dbSlug) => getCustomerDb(sessionId, dbSlug),
+    getCustomersCollection: () => getCustomersCollection(sessionId),
+    getAppNotesCollection: (dbSlug, appSlug) => getAppNotesCollection(sessionId, dbSlug, appSlug),
+  };
+}
+
 const SAMPLE_SIZE = 100;
 const LARGE_BODY_WARN_BYTES = 1 * 1024 * 1024; // 1 MB
 const LARGE_BODY_URGENT_BYTES = 8 * 1024 * 1024; // 8 MB
@@ -55,8 +67,9 @@ function buildInsufficientInfoReport(customer, app, noteCount) {
  * schema design concerns: field-type drift, oversized documents, and
  * missing recommended indexes.
  */
-async function generateSchemaReport(customerSlug, appSlug) {
-  const customer = await getCustomersCollection().findOne({
+async function generateSchemaReport(sessionId, customerSlug, appSlug) {
+  const { getCustomersCollection: getCustomers, getAppNotesCollection: getAppNotes, getCustomerDb: getCustDb } = db(sessionId);
+  const customer = await getCustomers().findOne({
     dbSlug: customerSlug,
   });
   if (!customer) {
@@ -67,7 +80,7 @@ async function generateSchemaReport(customerSlug, appSlug) {
     throw new Error("App not found for this customer");
   }
 
-  const notesCollection = getAppNotesCollection(customerSlug, appSlug);
+  const notesCollection = getAppNotes(customerSlug, appSlug);
 
   const totalNoteCount = await notesCollection.countDocuments({});
   if (totalNoteCount < MIN_NOTES_FOR_ANALYSIS) {
@@ -113,10 +126,10 @@ async function generateSchemaReport(customerSlug, appSlug) {
   );
 
   // --- GridFS bucket index check ---
-  const db = getCustomerDb(customerSlug);
+  const dbConn = getCustDb(customerSlug);
   let gridfsChunksIndexOk = true;
   try {
-    const chunksIndexes = await db
+    const chunksIndexes = await dbConn
       .collection(`${appSlug}-uploads.chunks`)
       .indexes();
     gridfsChunksIndexOk = chunksIndexes.some(

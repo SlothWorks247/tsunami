@@ -1,17 +1,23 @@
-const { isConnected } = require("./db");
+const { getClient } = require("./db");
 
-/**
- * Blocks access to data routes until a database connection has been
- * established via the connect screen (or auto-reconnected from a
- * previously saved local connection).
- */
-function requireConnection(req, res, next) {
-  if (!isConnected()) {
+function requireAuth(req, res, next) {
+  if (req.session && req.session.isAuthenticated) {
+    return next();
+  }
+  return res.status(401).json({ error: "Not authenticated. Please log in." });
+}
+
+function requireDb(req, res, next) {
+  if (!req.session || !req.session.isAuthenticated) {
+    return res.status(401).json({ error: "Not authenticated. Please log in." });
+  }
+  const client = getClient(req.sessionID);
+  if (!client) {
     return res
       .status(503)
-      .json({ error: "Not connected to a database. Please connect first." });
+      .json({ error: "Database connection lost. Please log in again." });
   }
   next();
 }
 
-module.exports = { requireConnection };
+module.exports = { requireAuth, requireDb };

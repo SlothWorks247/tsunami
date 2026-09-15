@@ -138,7 +138,7 @@ main {
   display: inline-block;
 }
 
-select, input[type="text"], input[type="number"], input[type="file"], textarea {
+select, input[type="text"], input[type="number"], input[type="file"], input[type="password"], textarea {
   padding: 8px 10px;
   border: 1px solid var(--mdb-border);
   border-radius: 4px;
@@ -404,7 +404,7 @@ form input, form textarea {
 
 .executive-summary-box {
   background: var(--mdb-bg);
-  border: 1px dashed var(--mdb-border);
+  border: 1px solid var(--mdb-border);
   border-radius: 6px;
   padding: 14px 16px;
   margin-bottom: 16px;
@@ -416,11 +416,22 @@ form input, form textarea {
   color: var(--mdb-forest);
 }
 
-.coming-soon-text {
-  margin: 0;
+.summary-output:empty {
+  display: none;
+}
+
+.summary-output {
+  background: var(--mdb-dark);
+  color: #E7F3EE;
+  padding: 14px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  font-family: "SF Mono", Menlo, monospace;
   font-size: 13px;
-  font-style: italic;
-  color: #6B7C78;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 8px 0 0;
 }
 
 .analysis-buttons {
@@ -484,4 +495,204 @@ table input {
 
 .global-discount-row input {
   width: 100px;
+}
+
+/* ---------- Chat UI ---------- */
+
+.chat-card {
+  margin-top: 20px;
+}
+
+.chat-intro {
+  font-size: 13px;
+  color: #6B7C78;
+  margin: 4px 0 12px;
+}
+
+.chat-messages {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--mdb-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--mdb-bg);
+  min-height: 80px;
+}
+
+.chat-message {
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.chat-message:last-child {
+  margin-bottom: 0;
+}
+
+.chat-user {
+  background: var(--mdb-forest);
+  color: white;
+  margin-left: 40px;
+}
+
+.chat-assistant {
+  background: white;
+  border: 1px solid var(--mdb-border);
+  margin-right: 40px;
+}
+
+.chat-typing {
+  color: #6B7C78;
+  font-style: italic;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-input-row select {
+  flex-shrink: 0;
+}
+
+.chat-input-row input {
+  flex-grow: 1;
+}
+
+.chat-input-row .btn-primary {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.chat-meta {
+  font-size: 11px;
+  color: #6B7C78;
+  margin-top: 6px;
+  min-height: 14px;
+}
+
+/* ---------- Activity Log ---------- */
+
+.log-card {
+  margin-top: 0;
+}
+
+.log-output {
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--mdb-dark);
+  color: #E7F3EE;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.log-entry {
+  padding: 2px 0;
+}
+
+.log-error {
+  color: #FF6B6B;
+}
+
+.log-success {
+  color: var(--mdb-spring);
+}
+
+.log-info {
+  color: #A8C8C0;
+}
+
+/* ---------- AI Settings ---------- */
+
+.settings-section-title {
+  font-size: 14px;
+  color: var(--mdb-forest);
+  margin: 16px 0 4px;
+}
+
+.settings-hint {
+  font-size: 12px;
+  color: #6B7C78;
+  margin: 0 0 12px;
+}
+
+.ai-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 700px) {
+  .ai-settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mdb-forest);
+  margin: 0;
+}
+
+.settings-field input,
+.settings-field select,
+.settings-field textarea {
+  width: 100%;
+}
+
+.settings-field textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.model-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.model-input-row input {
+  flex-grow: 1;
+}
+
+.model-input-row .btn-secondary {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--mdb-border);
+  margin: 24px 0;
+}
+
+.embeddings-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.embeddings-actions .btn-primary {
+  margin-top: 0;
+}
+
+.embeddings-actions .btn-secondary {
+  margin-top: 0;
 }

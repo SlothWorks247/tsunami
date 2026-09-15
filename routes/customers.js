@@ -10,7 +10,7 @@ const router = express.Router();
 // GET /api/customers - list all customers
 router.get("/", async (req, res) => {
   try {
-    const customers = await getCustomersCollection()
+    const customers = await getCustomersCollection(req.sessionID)
       .find({})
       .sort({ name: 1 })
       .toArray();
@@ -30,7 +30,7 @@ router.post("/", async (req, res) => {
     }
 
     const dbSlug = slugify(name);
-    const customers = getCustomersCollection();
+    const customers = getCustomersCollection(req.sessionID);
 
     const existing = await customers.findOne({ dbSlug });
     if (existing) {
@@ -71,7 +71,7 @@ router.patch("/:customerSlug", async (req, res) => {
         .json({ error: "discountPercent must be a number between 0 and 100, or null" });
     }
 
-    const customers = getCustomersCollection();
+    const customers = getCustomersCollection(req.sessionID);
     const result = await customers.findOneAndUpdate(
       { dbSlug: customerSlug },
       { $set: { discountPercent } },
@@ -92,7 +92,7 @@ router.patch("/:customerSlug", async (req, res) => {
 router.get("/:customerSlug/apps", async (req, res) => {
   try {
     const { customerSlug } = req.params;
-    const customer = await getCustomersCollection().findOne({
+    const customer = await getCustomersCollection(req.sessionID).findOne({
       dbSlug: customerSlug,
     });
     if (!customer) {
@@ -115,7 +115,7 @@ router.post("/:customerSlug/apps", async (req, res) => {
     }
 
     const appSlug = slugify(name);
-    const customers = getCustomersCollection();
+    const customers = getCustomersCollection(req.sessionID);
     const customer = await customers.findOne({ dbSlug: customerSlug });
     if (!customer) {
       return res.status(404).json({ error: "Customer not found" });
@@ -136,7 +136,7 @@ router.post("/:customerSlug/apps", async (req, res) => {
       { $push: { apps: newApp } }
     );
 
-    await ensureAppIndexes(customerSlug, appSlug);
+    await ensureAppIndexes(req.sessionID, customerSlug, appSlug);
 
     res.status(201).json(newApp);
   } catch (err) {
