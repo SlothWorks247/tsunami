@@ -252,6 +252,47 @@
       </div>
 
       <div class="card">
+        <h2>Skills</h2>
+        <p class="settings-hint">Skills are specialized instructions/reference material appended to the AI Assistant's system prompt. The default skill is built into the app; your own skills are added below and last only for this session.</p>
+
+        <h3 class="settings-section-title">Default Skill</h3>
+        <div id="default-skill-row" class="skill-row">
+          <div class="skill-row-info">
+            <span id="default-skill-name" class="skill-row-name">-</span>
+            <span id="default-skill-desc" class="skill-row-desc"></span>
+          </div>
+          <label class="skill-toggle">
+            <input type="checkbox" id="default-skill-enabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <hr class="settings-divider" />
+
+        <h3 class="settings-section-title">Add Your Own Skill</h3>
+        <p class="settings-hint">Lasts only for this session - not saved to the database. Paste markdown content or upload a .md file.</p>
+        <div class="settings-field">
+          <label for="skill-name-input">Skill Name</label>
+          <input id="skill-name-input" type="text" placeholder="e.g. api-design-review" />
+        </div>
+        <div class="settings-field">
+          <label for="skill-content-input">Skill Content (markdown)</label>
+          <textarea id="skill-content-input" rows="6" placeholder="Paste your SKILL.md content here..."></textarea>
+        </div>
+        <div class="settings-field">
+          <label for="skill-file-input">Or Upload a .md File</label>
+          <input id="skill-file-input" type="file" accept=".md,.markdown,.txt" />
+        </div>
+        <button id="add-skill-btn" class="btn-primary" type="button">Add Skill</button>
+        <p id="skill-add-status" class="status-msg"></p>
+
+        <h3 class="settings-section-title">Your Skills (this session)</h3>
+        <div id="custom-skills-list" class="skill-list">
+          <p class="settings-hint">No custom skills added yet.</p>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Tier Pricing</h2>
         <table id="tiers-table">
           <thead>

@@ -696,3 +696,47 @@ table input {
 .embeddings-actions .btn-secondary {
   margin-top: 0;
 }
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mdb-border);
+}
+
+.skill-row:last-child {
+  border-bottom: none;
+}
+
+.skill-row-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.skill-row-name {
+  font-weight: 600;
+}
+
+.skill-row-desc {
+  font-size: 0.85em;
+  color: var(--mdb-text-secondary, #6b7280);
+  overflow-wrap: break-word;
+}
+
+.skill-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
+}

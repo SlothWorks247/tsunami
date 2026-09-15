@@ -10,6 +10,7 @@ const configRouter = require("./routes/config");
 const notesRouter = require("./routes/notes");
 const llmRouter = require("./routes/llm");
 const chatRouter = require("./routes/chat");
+const skillsRouter = require("./routes/skills");
 const { addListener, removeListener } = require("./services/logger");
 
 const app = express();
@@ -43,6 +44,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/api/auth", authRouter);
 app.use("/api/llm", requireAuth, llmRouter);
+app.use("/api/skills", requireAuth, skillsRouter);
 
 app.get("/api/log/stream", requireAuth, (req, res) => {
   res.writeHead(200, {

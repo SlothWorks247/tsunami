@@ -4,6 +4,7 @@ const {
 } = require("../db");
 const { getRelevantNotes } = require("../services/retrieval");
 const { chatCompletion } = require("../services/llm");
+const { getSkillsBlock } = require("../services/skills");
 const { DEFAULT_SYSTEM_PROMPT, DEFAULT_RULES } = require("./llm");
 const { logStep } = require("../services/logger");
 
@@ -75,6 +76,7 @@ router.post("/chat", async (req, res) => {
     }
 
     systemPrompt += `Rules:\n${rules}`;
+    systemPrompt += getSkillsBlock(req);
 
     const messages = [{ role: "system", content: systemPrompt }];
     if (Array.isArray(history)) {
@@ -199,6 +201,7 @@ router.post("/summary", async (req, res) => {
     ).replace(/\{appName\}/g, appName);
 
     systemPrompt += `\n\nThe following engagement notes are available for this customer and app:\n\n${notesContext}\n\n`;
+    systemPrompt += getSkillsBlock(req);
 
     const messages = [
       { role: "system", content: systemPrompt },

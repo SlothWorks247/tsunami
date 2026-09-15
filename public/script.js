@@ -124,6 +124,7 @@
     loadCustomerDiscounts();
     loadLLMConfig();
     loadEmbeddingsConfig();
+    loadSkills();
   });
 
   function switchTab(tab) {
@@ -1036,6 +1037,152 @@
     } finally {
       testEmbeddingsBtn.disabled = false;
       testEmbeddingsBtn.textContent = "Test Connection";
+    }
+  });
+
+  // ---------- Settings: Skills ----------
+  const defaultSkillName = document.getElementById("default-skill-name");
+  const defaultSkillDesc = document.getElementById("default-skill-desc");
+  const defaultSkillEnabled = document.getElementById(
+    "default-skill-enabled"
+  );
+  const skillNameInput = document.getElementById("skill-name-input");
+  const skillContentInput = document.getElementById("skill-content-input");
+  const skillFileInput = document.getElementById("skill-file-input");
+  const addSkillBtn = document.getElementById("add-skill-btn");
+  const skillAddStatus = document.getElementById("skill-add-status");
+  const customSkillsList = document.getElementById("custom-skills-list");
+
+  async function loadSkills() {
+    try {
+      const data = await api("/api/skills");
+
+      if (data.default.available) {
+        defaultSkillName.textContent = data.default.name;
+        defaultSkillDesc.textContent = data.default.description
+          ? `${data.default.description} (~${data.default.sizeKB} KB)`
+          : `~${data.default.sizeKB} KB`;
+        defaultSkillEnabled.checked = data.default.enabled;
+        defaultSkillEnabled.disabled = false;
+      } else {
+        defaultSkillName.textContent = "Not available";
+        defaultSkillDesc.textContent =
+          "Default skill files were not found on the server.";
+        defaultSkillEnabled.disabled = true;
+      }
+
+      customSkillsList.innerHTML = "";
+      if (data.custom.length === 0) {
+        customSkillsList.innerHTML =
+          '<p class="settings-hint">No custom skills added yet.</p>';
+      } else {
+        for (const skill of data.custom) {
+          customSkillsList.appendChild(renderSkillRow(skill));
+        }
+      }
+    } catch {
+    }
+  }
+
+  function renderSkillRow(skill) {
+    const row = document.createElement("div");
+    row.className = "skill-row";
+    row.innerHTML = `
+      <div class="skill-row-info">
+        <span class="skill-row-name">${escapeHtml(skill.name)}</span>
+        <span class="skill-row-desc">${escapeHtml(
+          skill.contentPreview
+        )} (~${skill.sizeKB} KB)</span>
+      </div>
+      <label class="skill-toggle">
+        <input type="checkbox" class="skill-enabled-toggle" ${
+          skill.enabled ? "checked" : ""
+        } />
+        <span>Enabled</span>
+      </label>
+      <button type="button" class="btn-secondary skill-delete-btn">Delete</button>
+    `;
+
+    row.querySelector(".skill-enabled-toggle").addEventListener(
+      "change",
+      async (e) => {
+        try {
+          await api(`/api/skills/${skill.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: e.target.checked }),
+          });
+        } catch (err) {
+          setStatus(skillAddStatus, err.message, true);
+        }
+      }
+    );
+
+    row.querySelector(".skill-delete-btn").addEventListener(
+      "click",
+      async () => {
+        try {
+          await api(`/api/skills/${skill.id}`, { method: "DELETE" });
+          loadSkills();
+        } catch (err) {
+          setStatus(skillAddStatus, err.message, true);
+        }
+      }
+    );
+
+    return row;
+  }
+
+  defaultSkillEnabled.addEventListener("change", async (e) => {
+    try {
+      await api("/api/skills/default", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: e.target.checked }),
+      });
+    } catch (err) {
+      setStatus(skillAddStatus, err.message, true);
+      e.target.checked = !e.target.checked;
+    }
+  });
+
+  skillFileInput.addEventListener("change", () => {
+    const file = skillFileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      skillContentInput.value = reader.result;
+      if (!skillNameInput.value.trim()) {
+        skillNameInput.value = file.name.replace(/\.(md|markdown|txt)$/i, "");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  addSkillBtn.addEventListener("click", async () => {
+    const name = skillNameInput.value.trim();
+    const content = skillContentInput.value.trim();
+    if (!name || !content) {
+      setStatus(
+        skillAddStatus,
+        "Skill name and content are both required.",
+        true
+      );
+      return;
+    }
+    try {
+      await api("/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, content }),
+      });
+      setStatus(skillAddStatus, `Skill "${name}" added.`);
+      skillNameInput.value = "";
+      skillContentInput.value = "";
+      skillFileInput.value = "";
+      loadSkills();
+    } catch (err) {
+      setStatus(skillAddStatus, err.message, true);
     }
   });
 
