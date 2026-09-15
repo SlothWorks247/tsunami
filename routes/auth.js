@@ -4,7 +4,16 @@ const { connect, removeClient, getClient } = require("../db");
 const router = express.Router();
 
 router.post("/login", async (req, res) => {
-  const { host, username, password } = req.body || {};
+  const {
+    host,
+    username,
+    password,
+    llmProvider,
+    llmEndpoint,
+    llmModel,
+    llmApiKey,
+    voyageApiKey,
+  } = req.body || {};
 
   if (!host || !username || !password) {
     return res
@@ -12,10 +21,35 @@ router.post("/login", async (req, res) => {
       .json({ error: "Cluster host, username, and password are required." });
   }
 
+  if (!llmProvider || !llmEndpoint || !llmModel) {
+    return res.status(400).json({
+      error: "AI provider, endpoint, and model are required.",
+    });
+  }
+  if (llmProvider === "openai" && (!llmApiKey || !llmApiKey.trim())) {
+    return res.status(400).json({
+      error: "An API key is required for an OpenAI-compatible endpoint.",
+    });
+  }
+
   try {
     const result = await connect(req.sessionID, host, username, password);
     req.session.isAuthenticated = true;
     req.session.host = result.host;
+
+    req.session.llmProvider = llmProvider;
+    req.session.llmEndpoint = llmEndpoint.trim();
+    req.session.llmModel = llmModel.trim();
+    if (llmApiKey && llmApiKey.trim()) {
+      req.session.llmApiKey = llmApiKey.trim();
+    } else {
+      delete req.session.llmApiKey;
+    }
+
+    if (voyageApiKey && voyageApiKey.trim()) {
+      req.session.voyageApiKey = voyageApiKey.trim();
+    }
+
     return res.json({ ok: true, host: result.host });
   } catch (err) {
     return res.status(401).json({ error: err.message || "Unable to connect to MongoDB Atlas." });

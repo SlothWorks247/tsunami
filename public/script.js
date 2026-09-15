@@ -18,6 +18,47 @@
   const connectForm = document.getElementById("connect-form");
   const connectSubmitBtn = document.getElementById("connect-submit-btn");
   const connectStatus = document.getElementById("connect-status");
+  const connectLlmProvider = document.getElementById("connect-llm-provider");
+  const connectLlmEndpoint = document.getElementById("connect-llm-endpoint");
+  const connectLlmModel = document.getElementById("connect-llm-model");
+  const connectLlmApiKey = document.getElementById("connect-llm-api-key");
+  const connectLlmApiKeyField = document.getElementById(
+    "connect-llm-apikey-field"
+  );
+  const connectVoyageApiKey = document.getElementById(
+    "connect-voyage-api-key"
+  );
+
+  function selectConnectProvider(provider) {
+    if (provider === "ollama") {
+      if (
+        !connectLlmEndpoint.value ||
+        connectLlmEndpoint.value === "https://api.openai.com"
+      ) {
+        connectLlmEndpoint.value = "http://localhost:11434";
+      }
+      if (!connectLlmModel.value) connectLlmModel.value = "llama3.2:1b";
+      connectLlmApiKeyField.classList.add("hidden");
+      connectLlmApiKey.required = false;
+    } else {
+      if (connectLlmEndpoint.value === "http://localhost:11434") {
+        connectLlmEndpoint.value = "";
+      }
+      if (!connectLlmEndpoint.value) {
+        connectLlmEndpoint.value = "https://api.openai.com";
+      }
+      if (!connectLlmModel.value || connectLlmModel.value === "llama3.2:1b") {
+        connectLlmModel.value = "gpt-4o-mini";
+      }
+      connectLlmApiKeyField.classList.remove("hidden");
+      connectLlmApiKey.required = true;
+    }
+  }
+
+  connectLlmProvider.addEventListener("change", () => {
+    selectConnectProvider(connectLlmProvider.value);
+  });
+  selectConnectProvider(connectLlmProvider.value);
 
   async function checkConnectionStatus() {
     const status = await fetch("/api/auth/session").then((r) => r.json());
@@ -53,15 +94,43 @@
     const host = document.getElementById("connect-host").value.trim();
     const username = document.getElementById("connect-username").value.trim();
     const password = document.getElementById("connect-password").value;
-    connectSubmitBtn.disabled = true;
-    connectSubmitBtn.textContent = "Connecting...";
+    const llmProvider = connectLlmProvider.value;
+    const llmEndpoint = connectLlmEndpoint.value.trim();
+    const llmModel = connectLlmModel.value.trim();
+    const llmApiKey = connectLlmApiKey.value;
+    const voyageApiKey = connectVoyageApiKey.value.trim();
+
     connectStatus.className = "status-msg";
     connectStatus.textContent = "";
+
+    if (!llmEndpoint || !llmModel) {
+      connectStatus.className = "status-msg error";
+      connectStatus.textContent = "AI provider endpoint and model are required.";
+      return;
+    }
+    if (llmProvider === "openai" && !llmApiKey.trim()) {
+      connectStatus.className = "status-msg error";
+      connectStatus.textContent =
+        "An API key is required for an OpenAI-compatible endpoint.";
+      return;
+    }
+
+    connectSubmitBtn.disabled = true;
+    connectSubmitBtn.textContent = "Connecting...";
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, username, password }),
+        body: JSON.stringify({
+          host,
+          username,
+          password,
+          llmProvider,
+          llmEndpoint,
+          llmModel,
+          llmApiKey: llmApiKey || undefined,
+          voyageApiKey: voyageApiKey || undefined,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed to connect");

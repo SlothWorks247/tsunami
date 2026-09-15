@@ -32,6 +32,30 @@
           <input id="connect-username" type="text" required />
           <label for="connect-password">Password</label>
           <input id="connect-password" type="password" required />
+
+          <hr class="settings-divider" />
+          <h3 class="settings-section-title">AI Assistant Provider</h3>
+          <p class="settings-hint">Choose how the AI Assistant chat feature connects to an LLM. You can change this later in Settings.</p>
+          <label for="connect-llm-provider">Provider</label>
+          <select id="connect-llm-provider" required>
+            <option value="ollama">Ollama (local)</option>
+            <option value="openai">OpenAI-compatible endpoint</option>
+          </select>
+          <label for="connect-llm-endpoint">Endpoint</label>
+          <input id="connect-llm-endpoint" type="text" placeholder="http://localhost:11434" required />
+          <label for="connect-llm-model">Model</label>
+          <input id="connect-llm-model" type="text" placeholder="llama3.2:1b" required />
+          <div id="connect-llm-apikey-field">
+            <label for="connect-llm-api-key">API Key</label>
+            <input id="connect-llm-api-key" type="password" placeholder="sk-..." />
+          </div>
+
+          <hr class="settings-divider" />
+          <h3 class="settings-section-title">Embeddings (optional)</h3>
+          <p class="settings-hint">Enables smart vector search for the AI Assistant. Defaults to voyage-4-lite - change the model later in Settings if needed.</p>
+          <label for="connect-voyage-api-key">Atlas Model API Key</label>
+          <input id="connect-voyage-api-key" type="password" placeholder="pa-..." />
+
           <button type="submit" class="btn-primary" id="connect-submit-btn">Connect</button>
         </form>
         <p id="connect-status" class="status-msg"></p>
