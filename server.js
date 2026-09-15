@@ -40,10 +40,13 @@ app.get("/api/log/stream", requireAuth, (req, res) => {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
   });
   res.write("\n");
   addListener(req.sessionID, res);
-  req.on("close", () => removeListener(req.sessionID, res));
+  const cleanup = () => removeListener(req.sessionID, res);
+  req.on("close", cleanup);
+  req.on("error", cleanup);
 });
 
 app.use("/api/customers", requireDb, customersRouter);

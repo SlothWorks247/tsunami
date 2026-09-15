@@ -95,6 +95,8 @@
       }
     };
     logSource.onerror = () => {
+      logSource.close();
+      setTimeout(startLogStream, 5000);
     };
   }
 

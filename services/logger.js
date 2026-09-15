@@ -29,6 +29,24 @@ function removeListener(sessionId, res) {
   }
 }
 
+// Heartbeat interval to detect and prune dead connections
+setInterval(() => {
+  for (const [sessionId, set] of listeners) {
+    for (const res of set) {
+      try {
+        res.write(": heartbeat\n\n");
+      } catch {
+        // Socket write failed — connection is dead, remove it
+        set.delete(res);
+      }
+    }
+    // Clean up empty sets
+    if (set.size === 0) {
+      listeners.delete(sessionId);
+    }
+  }
+}, 30000);
+
 function logStep(sessionId, message, type = 'info') {
   const entry = { message, type, timestamp: new Date().toISOString() };
   const set = listeners.get(sessionId);
