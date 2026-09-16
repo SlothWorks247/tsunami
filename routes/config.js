@@ -22,7 +22,12 @@ router.get("/pricing", async (req, res) => {
 // PUT /api/config/pricing - replace tiers and/or discountPercent
 router.put("/pricing", async (req, res) => {
   try {
-    const { tiers, discountPercent } = req.body;
+    const {
+      tiers,
+      discountPercent,
+      defaultGrowthMultiplier,
+      defaultIndexOverheadPercent,
+    } = req.body;
 
     const update = { updatedAt: new Date() };
 
@@ -52,6 +57,30 @@ router.put("/pricing", async (req, res) => {
           .json({ error: "discountPercent must be a number between 0 and 100" });
       }
       update.discountPercent = discountPercent;
+    }
+
+    if (defaultGrowthMultiplier !== undefined) {
+      if (
+        typeof defaultGrowthMultiplier !== "number" ||
+        defaultGrowthMultiplier <= 0
+      ) {
+        return res.status(400).json({
+          error: "defaultGrowthMultiplier must be a number greater than 0",
+        });
+      }
+      update.defaultGrowthMultiplier = defaultGrowthMultiplier;
+    }
+
+    if (defaultIndexOverheadPercent !== undefined) {
+      if (
+        typeof defaultIndexOverheadPercent !== "number" ||
+        defaultIndexOverheadPercent < 0
+      ) {
+        return res.status(400).json({
+          error: "defaultIndexOverheadPercent must be a number 0 or greater",
+        });
+      }
+      update.defaultIndexOverheadPercent = defaultIndexOverheadPercent;
     }
 
     const result = await getPricingConfigCollection(req.sessionID).findOneAndUpdate(

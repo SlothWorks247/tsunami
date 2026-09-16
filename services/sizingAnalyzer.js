@@ -75,24 +75,39 @@ async function generateSizingReport(
     return buildInsufficientInfoReport(customer, app);
   }
 
-  const parsedGrowthMultiplier =
-    growthMultiplier != null && Number.isFinite(Number(growthMultiplier)) && Number(growthMultiplier) > 0
-      ? Number(growthMultiplier)
-      : DEFAULT_GROWTH_MULTIPLIER;
-
-  const parsedIndexOverheadPercent =
-    indexOverheadPercent != null &&
-    Number.isFinite(Number(indexOverheadPercent)) &&
-    Number(indexOverheadPercent) >= 0
-      ? Number(indexOverheadPercent)
-      : DEFAULT_INDEX_OVERHEAD_PERCENT;
-
   const pricingConfig = await getPricing().findOne({
     _id: "default",
   });
   if (!pricingConfig) {
     throw new Error("Pricing config not found - has the server seeded it yet?");
   }
+
+  // Priority: explicit per-calculation value > saved Sizing Settings
+  // default > hardcoded fallback (for pricingConfig docs seeded before
+  // these fields existed).
+  const configDefaultGrowth =
+    Number.isFinite(pricingConfig.defaultGrowthMultiplier) &&
+    pricingConfig.defaultGrowthMultiplier > 0
+      ? pricingConfig.defaultGrowthMultiplier
+      : DEFAULT_GROWTH_MULTIPLIER;
+
+  const configDefaultIndexOverhead =
+    Number.isFinite(pricingConfig.defaultIndexOverheadPercent) &&
+    pricingConfig.defaultIndexOverheadPercent >= 0
+      ? pricingConfig.defaultIndexOverheadPercent
+      : DEFAULT_INDEX_OVERHEAD_PERCENT;
+
+  const parsedGrowthMultiplier =
+    growthMultiplier != null && Number.isFinite(Number(growthMultiplier)) && Number(growthMultiplier) > 0
+      ? Number(growthMultiplier)
+      : configDefaultGrowth;
+
+  const parsedIndexOverheadPercent =
+    indexOverheadPercent != null &&
+    Number.isFinite(Number(indexOverheadPercent)) &&
+    Number(indexOverheadPercent) >= 0
+      ? Number(indexOverheadPercent)
+      : configDefaultIndexOverhead;
 
   const dataMB = parsedDataSizeGB * 1024;
   const indexMB = dataMB * (parsedIndexOverheadPercent / 100);

@@ -163,6 +163,8 @@ async function seedPricingConfig(sessionId) {
       _id: "default",
       tiers: DEFAULT_PRICING_TIERS,
       discountPercent: 0,
+      defaultGrowthMultiplier: 3,
+      defaultIndexOverheadPercent: 15,
       updatedAt: new Date(),
     });
     console.log("Seeded platform.pricingConfig with default Atlas pricing.");

@@ -198,161 +198,206 @@
 
     <!-- SETTINGS VIEW -->
     <section id="view-settings" class="view">
-      <!-- AI Settings -->
-      <div class="card">
-        <h2>AI Configuration</h2>
+      <div class="settings-layout">
+        <nav class="settings-nav">
+          <button type="button" class="settings-nav-item active" data-panel="general">General Settings</button>
+          <button type="button" class="settings-nav-item" data-panel="ai-model">AI Model</button>
+          <button type="button" class="settings-nav-item" data-panel="skills">Skills</button>
+          <button type="button" class="settings-nav-item" data-panel="embeddings">Embeddings</button>
+          <button type="button" class="settings-nav-item" data-panel="sizing">Sizing Settings</button>
+        </nav>
 
-        <h3 class="settings-section-title">LLM Provider</h3>
-        <p class="settings-hint">Configure an OpenAI-compatible LLM endpoint. Works with Ollama (local), OpenAI, vLLM, LM Studio, etc.</p>
-        <div class="ai-settings-grid">
-          <div class="settings-field">
-            <label for="llm-provider">Provider</label>
-            <select id="llm-provider">
-              <option value="ollama">Ollama (local)</option>
-              <option value="openai">OpenAI</option>
-              <option value="custom">Custom</option>
-            </select>
+        <div class="settings-panels">
+          <!-- GENERAL SETTINGS -->
+          <div id="settings-panel-general" class="settings-panel active">
+            <h2>General Settings</h2>
+            <p class="settings-hint">No general settings yet. Check back soon.</p>
           </div>
-          <div class="settings-field">
-            <label for="llm-endpoint">Endpoint</label>
-            <input id="llm-endpoint" type="text" placeholder="http://localhost:11434" />
-          </div>
-          <div class="settings-field">
-            <label for="llm-model-input">Model</label>
-            <div class="model-input-row">
-              <select id="llm-model-select" class="hidden"></select>
-              <input id="llm-model-input" type="text" placeholder="llama3.2:1b" />
-              <button id="llm-fetch-models-btn" class="btn-secondary" type="button">Fetch Models</button>
+
+          <!-- AI MODEL -->
+          <div id="settings-panel-ai-model" class="settings-panel">
+            <div class="card">
+              <h2>AI Model</h2>
+              <p class="settings-hint">Configure an OpenAI-compatible LLM endpoint. Works with Ollama (local), OpenAI, vLLM, LM Studio, etc.</p>
+              <div class="ai-settings-grid">
+                <div class="settings-field">
+                  <label for="llm-provider">Provider</label>
+                  <select id="llm-provider">
+                    <option value="ollama">Ollama (local)</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div class="settings-field">
+                  <label for="llm-endpoint">Endpoint</label>
+                  <input id="llm-endpoint" type="text" placeholder="http://localhost:11434" />
+                </div>
+                <div class="settings-field">
+                  <label for="llm-model-input">Model</label>
+                  <div class="model-input-row">
+                    <select id="llm-model-select" class="hidden"></select>
+                    <input id="llm-model-input" type="text" placeholder="llama3.2:1b" />
+                    <button id="llm-fetch-models-btn" class="btn-secondary" type="button">Fetch Models</button>
+                  </div>
+                </div>
+                <div class="settings-field">
+                  <label for="llm-api-key">API Key (optional — needed for OpenAI)</label>
+                  <input id="llm-api-key" type="password" placeholder="sk-..." />
+                </div>
+              </div>
+              <div class="settings-field">
+                <label for="llm-system-prompt">System Prompt</label>
+                <textarea id="llm-system-prompt" rows="4"></textarea>
+              </div>
+              <div class="settings-field">
+                <label for="llm-rules">Rules</label>
+                <textarea id="llm-rules" rows="4"></textarea>
+              </div>
+              <button id="save-llm-config-btn" class="btn-primary" type="button">Save LLM Config</button>
+              <p id="llm-config-status" class="status-msg"></p>
             </div>
           </div>
-          <div class="settings-field">
-            <label for="llm-api-key">API Key (optional — needed for OpenAI)</label>
-            <input id="llm-api-key" type="password" placeholder="sk-..." />
+
+          <!-- SKILLS -->
+          <div id="settings-panel-skills" class="settings-panel">
+            <div class="card">
+              <h2>Skills</h2>
+              <p class="settings-hint">Skills are specialized instructions/reference material appended to the AI Assistant's system prompt. The default skill is built into the app; your own skills are added below and last only for this session.</p>
+
+              <h3 class="settings-section-title">Default Skill</h3>
+              <div id="default-skill-row" class="skill-row">
+                <div class="skill-row-info">
+                  <span id="default-skill-name" class="skill-row-name">-</span>
+                  <span id="default-skill-desc" class="skill-row-desc"></span>
+                </div>
+                <label class="skill-toggle">
+                  <input type="checkbox" id="default-skill-enabled" />
+                  <span>Enabled</span>
+                </label>
+              </div>
+
+              <hr class="settings-divider" />
+
+              <h3 class="settings-section-title">Add Your Own Skill</h3>
+              <p class="settings-hint">Lasts only for this session - not saved to the database. Paste markdown content or upload a .md file.</p>
+              <div class="settings-field">
+                <label for="skill-name-input">Skill Name</label>
+                <input id="skill-name-input" type="text" placeholder="e.g. api-design-review" />
+              </div>
+              <div class="settings-field">
+                <label for="skill-content-input">Skill Content (markdown)</label>
+                <textarea id="skill-content-input" rows="6" placeholder="Paste your SKILL.md content here..."></textarea>
+              </div>
+              <div class="settings-field">
+                <label for="skill-file-input">Or Upload a .md File</label>
+                <input id="skill-file-input" type="file" accept=".md,.markdown,.txt" />
+              </div>
+              <button id="add-skill-btn" class="btn-primary" type="button">Add Skill</button>
+              <p id="skill-add-status" class="status-msg"></p>
+
+              <h3 class="settings-section-title">Your Skills (this session)</h3>
+              <div id="custom-skills-list" class="skill-list">
+                <p class="settings-hint">No custom skills added yet.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- EMBEDDINGS -->
+          <div id="settings-panel-embeddings" class="settings-panel">
+            <div class="card">
+              <h2>Embeddings</h2>
+              <p class="settings-hint">Configure the MongoDB Atlas Embedding and Reranking API for vector search. Create a Model API key in the Atlas UI (AI Model APIs).</p>
+              <div class="ai-settings-grid">
+                <div class="settings-field">
+                  <label for="embeddings-api-key">Atlas Model API Key</label>
+                  <input id="embeddings-api-key" type="password" placeholder="pa-..." />
+                </div>
+                <div class="settings-field">
+                  <label for="embeddings-model">Embedding Model</label>
+                  <select id="embeddings-model">
+                    <option value="voyage-4-lite">voyage-4-lite (1024 dims)</option>
+                    <option value="voyage-4">voyage-4 (1024 dims)</option>
+                    <option value="voyage-4-large">voyage-4-large (1024 dims)</option>
+                    <option value="voyage-4-nano">voyage-4-nano (512 dims)</option>
+                    <option value="voyage-3">voyage-3 (1024 dims)</option>
+                    <option value="voyage-3-lite">voyage-3-lite (512 dims)</option>
+                    <option value="voyage-3.5">voyage-3.5 (1024 dims)</option>
+                    <option value="voyage-3.5-lite">voyage-3.5-lite (512 dims)</option>
+                    <option value="voyage-code-4">voyage-code-4 (1024 dims)</option>
+                    <option value="voyage-code-3">voyage-code-3 (1024 dims)</option>
+                    <option value="voyage-finance-2">voyage-finance-2 (1024 dims)</option>
+                    <option value="voyage-law-2">voyage-law-2 (1024 dims)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="embeddings-actions">
+                <button id="save-embeddings-config-btn" class="btn-primary" type="button">Save Embeddings Config</button>
+                <button id="test-embeddings-btn" class="btn-secondary" type="button">Test Connection</button>
+              </div>
+              <p id="embeddings-config-status" class="status-msg"></p>
+            </div>
+          </div>
+
+          <!-- SIZING SETTINGS -->
+          <div id="settings-panel-sizing" class="settings-panel">
+            <h2>Sizing Settings</h2>
+
+            <div class="card">
+              <h3 class="settings-section-title">Tier Pricing</h3>
+              <table id="tiers-table">
+                <thead>
+                  <tr>
+                    <th>Tier</th>
+                    <th>RAM (GB)</th>
+                    <th>Storage (GB)</th>
+                    <th>vCPUs</th>
+                    <th>Monthly Price ($)</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tiers-tbody"></tbody>
+              </table>
+              <button id="add-tier-row-btn" class="btn-secondary" type="button">+ Add Tier</button>
+
+              <hr class="settings-divider" />
+
+              <h3 class="settings-section-title">Sizing Calculation Defaults</h3>
+              <p class="settings-hint">Used as defaults for the Sizing Recommendation calculator on the Notes page - each calculation can still override these.</p>
+              <div class="ai-settings-grid">
+                <div class="settings-field">
+                  <label for="global-discount-input">Global Default Discount %</label>
+                  <input id="global-discount-input" type="number" min="0" max="100" step="0.1" />
+                </div>
+                <div class="settings-field">
+                  <label for="default-growth-multiplier">Default Growth Multiplier</label>
+                  <input id="default-growth-multiplier" type="number" min="1" step="0.1" placeholder="3" />
+                </div>
+                <div class="settings-field">
+                  <label for="default-index-overhead">Default Index Overhead %</label>
+                  <input id="default-index-overhead" type="number" min="0" step="1" placeholder="15" />
+                </div>
+              </div>
+
+              <button id="save-pricing-btn" class="btn-primary" type="button">Save and go back to Notes</button>
+              <p id="pricing-status" class="status-msg"></p>
+            </div>
+
+            <div class="card">
+              <h3 class="settings-section-title">Customer Discount Overrides</h3>
+              <table id="customer-discounts-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Discount % (blank = use global default)</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="customer-discounts-tbody"></tbody>
+              </table>
+              <p id="customer-discount-status" class="status-msg"></p>
+            </div>
           </div>
         </div>
-        <div class="settings-field">
-          <label for="llm-system-prompt">System Prompt</label>
-          <textarea id="llm-system-prompt" rows="4"></textarea>
-        </div>
-        <div class="settings-field">
-          <label for="llm-rules">Rules</label>
-          <textarea id="llm-rules" rows="4"></textarea>
-        </div>
-        <button id="save-llm-config-btn" class="btn-primary" type="button">Save LLM Config</button>
-        <p id="llm-config-status" class="status-msg"></p>
-
-        <hr class="settings-divider" />
-
-        <h3 class="settings-section-title">Embeddings (Voyage AI via Atlas)</h3>
-        <p class="settings-hint">Configure the MongoDB Atlas Embedding and Reranking API for vector search. Create a Model API key in the Atlas UI (AI Model APIs).</p>
-        <div class="ai-settings-grid">
-          <div class="settings-field">
-            <label for="embeddings-api-key">Atlas Model API Key</label>
-            <input id="embeddings-api-key" type="password" placeholder="pa-..." />
-          </div>
-          <div class="settings-field">
-            <label for="embeddings-model">Embedding Model</label>
-            <select id="embeddings-model">
-              <option value="voyage-4-lite">voyage-4-lite (1024 dims)</option>
-              <option value="voyage-4">voyage-4 (1024 dims)</option>
-              <option value="voyage-4-large">voyage-4-large (1024 dims)</option>
-              <option value="voyage-4-nano">voyage-4-nano (512 dims)</option>
-              <option value="voyage-3">voyage-3 (1024 dims)</option>
-              <option value="voyage-3-lite">voyage-3-lite (512 dims)</option>
-              <option value="voyage-3.5">voyage-3.5 (1024 dims)</option>
-              <option value="voyage-3.5-lite">voyage-3.5-lite (512 dims)</option>
-              <option value="voyage-code-4">voyage-code-4 (1024 dims)</option>
-              <option value="voyage-code-3">voyage-code-3 (1024 dims)</option>
-              <option value="voyage-finance-2">voyage-finance-2 (1024 dims)</option>
-              <option value="voyage-law-2">voyage-law-2 (1024 dims)</option>
-            </select>
-          </div>
-        </div>
-        <div class="embeddings-actions">
-          <button id="save-embeddings-config-btn" class="btn-primary" type="button">Save Embeddings Config</button>
-          <button id="test-embeddings-btn" class="btn-secondary" type="button">Test Connection</button>
-        </div>
-        <p id="embeddings-config-status" class="status-msg"></p>
-      </div>
-
-      <div class="card">
-        <h2>Skills</h2>
-        <p class="settings-hint">Skills are specialized instructions/reference material appended to the AI Assistant's system prompt. The default skill is built into the app; your own skills are added below and last only for this session.</p>
-
-        <h3 class="settings-section-title">Default Skill</h3>
-        <div id="default-skill-row" class="skill-row">
-          <div class="skill-row-info">
-            <span id="default-skill-name" class="skill-row-name">-</span>
-            <span id="default-skill-desc" class="skill-row-desc"></span>
-          </div>
-          <label class="skill-toggle">
-            <input type="checkbox" id="default-skill-enabled" />
-            <span>Enabled</span>
-          </label>
-        </div>
-
-        <hr class="settings-divider" />
-
-        <h3 class="settings-section-title">Add Your Own Skill</h3>
-        <p class="settings-hint">Lasts only for this session - not saved to the database. Paste markdown content or upload a .md file.</p>
-        <div class="settings-field">
-          <label for="skill-name-input">Skill Name</label>
-          <input id="skill-name-input" type="text" placeholder="e.g. api-design-review" />
-        </div>
-        <div class="settings-field">
-          <label for="skill-content-input">Skill Content (markdown)</label>
-          <textarea id="skill-content-input" rows="6" placeholder="Paste your SKILL.md content here..."></textarea>
-        </div>
-        <div class="settings-field">
-          <label for="skill-file-input">Or Upload a .md File</label>
-          <input id="skill-file-input" type="file" accept=".md,.markdown,.txt" />
-        </div>
-        <button id="add-skill-btn" class="btn-primary" type="button">Add Skill</button>
-        <p id="skill-add-status" class="status-msg"></p>
-
-        <h3 class="settings-section-title">Your Skills (this session)</h3>
-        <div id="custom-skills-list" class="skill-list">
-          <p class="settings-hint">No custom skills added yet.</p>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Tier Pricing</h2>
-        <table id="tiers-table">
-          <thead>
-            <tr>
-              <th>Tier</th>
-              <th>RAM (GB)</th>
-              <th>Storage (GB)</th>
-              <th>vCPUs</th>
-              <th>Monthly Price ($)</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="tiers-tbody"></tbody>
-        </table>
-        <button id="add-tier-row-btn" class="btn-secondary" type="button">+ Add Tier</button>
-        <div class="global-discount-row">
-          <label for="global-discount-input">Global Default Discount %</label>
-          <input id="global-discount-input" type="number" min="0" max="100" step="0.1" />
-        </div>
-        <button id="save-pricing-btn" class="btn-primary" type="button">Save and go back to Notes</button>
-        <p id="pricing-status" class="status-msg"></p>
-      </div>
-
-      <div class="card">
-        <h2>Customer Discount Overrides</h2>
-        <table id="customer-discounts-table">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Discount % (blank = use global default)</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="customer-discounts-tbody"></tbody>
-        </table>
-        <p id="customer-discount-status" class="status-msg"></p>
       </div>
     </section>
   </main>

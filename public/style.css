@@ -740,3 +740,72 @@ table input {
   display: flex;
   flex-direction: column;
 }
+
+/* ---------- Settings nav ---------- */
+
+.settings-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 200px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+}
+
+.settings-nav-item {
+  text-align: left;
+  background: white;
+  border: 1px solid var(--mdb-border);
+  color: var(--mdb-dark);
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.settings-nav-item:hover {
+  background: #E7F3EE;
+}
+
+.settings-nav-item.active {
+  background: var(--mdb-forest);
+  color: white;
+  border-color: var(--mdb-forest);
+}
+
+.settings-panels {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-panel {
+  display: none;
+}
+
+.settings-panel.active {
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+    position: static;
+  }
+
+  .settings-nav-item {
+    white-space: nowrap;
+  }
+}

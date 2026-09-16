@@ -203,6 +203,23 @@
     viewSettings.classList.toggle("active", !isNotes);
   }
 
+  // ---------- Settings sub-navigation ----------
+  const settingsNavItems = document.querySelectorAll(".settings-nav-item");
+  const settingsPanels = document.querySelectorAll(".settings-panel");
+
+  settingsNavItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      const target = item.dataset.panel;
+      settingsNavItems.forEach((i) => i.classList.toggle("active", i === item));
+      settingsPanels.forEach((panel) =>
+        panel.classList.toggle(
+          "active",
+          panel.id === `settings-panel-${target}`
+        )
+      );
+    });
+  });
+
   // ---------- Helpers ----------
   async function api(path, options) {
     const res = await fetch(path, options);
@@ -838,8 +855,24 @@
     sizingForm.classList.add("hidden");
   }
 
-  sizingBtn.addEventListener("click", () => {
+  sizingBtn.addEventListener("click", async () => {
+    const isOpening = sizingForm.classList.contains("hidden");
     sizingForm.classList.toggle("hidden");
+    if (isOpening) {
+      try {
+        const config = await api("/api/config/pricing");
+        if (!sizingGrowthInput.value && config.defaultGrowthMultiplier != null) {
+          sizingGrowthInput.value = config.defaultGrowthMultiplier;
+        }
+        if (
+          !sizingIndexOverheadInput.value &&
+          config.defaultIndexOverheadPercent != null
+        ) {
+          sizingIndexOverheadInput.value = config.defaultIndexOverheadPercent;
+        }
+      } catch {
+      }
+    }
   });
 
   sizingCalculateBtn.addEventListener("click", async () => {
@@ -1259,6 +1292,12 @@
   const tiersTbody = document.getElementById("tiers-tbody");
   const addTierRowBtn = document.getElementById("add-tier-row-btn");
   const globalDiscountInput = document.getElementById("global-discount-input");
+  const defaultGrowthMultiplierInput = document.getElementById(
+    "default-growth-multiplier"
+  );
+  const defaultIndexOverheadInput = document.getElementById(
+    "default-index-overhead"
+  );
   const savePricingBtn = document.getElementById("save-pricing-btn");
   const pricingStatus = document.getElementById("pricing-status");
 
@@ -1286,6 +1325,9 @@
       addTierRow(tier);
     }
     globalDiscountInput.value = config.discountPercent ?? 0;
+    defaultGrowthMultiplierInput.value = config.defaultGrowthMultiplier ?? 3;
+    defaultIndexOverheadInput.value = config.defaultIndexOverheadPercent ?? 15;
+    return config;
   }
 
   savePricingBtn.addEventListener("click", async () => {
@@ -1302,11 +1344,20 @@
       monthlyPrice: Number(row.querySelector(".tier-price").value),
     }));
     const discountPercent = Number(globalDiscountInput.value) || 0;
+    const defaultGrowthMultiplier =
+      Number(defaultGrowthMultiplierInput.value) || 3;
+    const defaultIndexOverheadPercent =
+      Number(defaultIndexOverheadInput.value) || 0;
     try {
       await api("/api/config/pricing", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tiers, discountPercent }),
+        body: JSON.stringify({
+          tiers,
+          discountPercent,
+          defaultGrowthMultiplier,
+          defaultIndexOverheadPercent,
+        }),
       });
       switchTab("notes");
     } catch (err) {
